@@ -1,0 +1,8 @@
+capture,action,cmd,section,changed_block_index,first_value_hex,last_value_hex,first_value_dec,last_value_dec,inferred_field
+MAIN_L_VOL_12_TO_11,Main L Vol 12 dB -> 11 dB,0x0E,0x00,0,0x62,0x61,98,97,Main L output raw dB
+MAIN_R_VOL_12_TO_11,Main R Vol 12 dB -> 11 dB,0x0E,0x00,2,0x62,0x61,98,97,Main R output raw dB
+MAIN_MIC_LEVEL_100_TO_90,Main Mic Level 100% -> 90%,0x0E,0x00,4,0x63,0x5A,99,90,Main Mic level %
+MAIN_MUSIC_LEVEL_100_TO_95,Main Music Level 100% -> 95%,0x0E,0x00,6,0x63,0x5F,99,95,Main Music level %
+CENTER_VOL_12db_TO_11db,Center Vol 12 dB -> 11 dB,0x0E,0x04,0,0x62,0x61,98,97,Center output raw dB
+SUB_VOL_12_TO_10,Sub Vol 12 dB -> 10 dB,0x0E,0x05,0,0x62,0x5F,98,95,Sub output raw dB
+MIC_EQ_LINK_OFF_TO_ON,Mic EQ Link OFF -> ON,0x3C,,payload,01 01 9E,,,,Mic EQ Link ON payload; compare previous OFF payload 00 00 C4
