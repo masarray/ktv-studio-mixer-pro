@@ -62,6 +62,27 @@ const K500_USB_VENDOR_ID = 0x10c4;
 const K500_USB_PRODUCT_ID = 0x0321;
 const HEARTBEAT_INTERVAL_MS = 3200;
 const HEARTBEAT_WRITE_TIMEOUT_MS = 900;
+const LIVE_SKIP_LOG_INTERVAL_MS = 1500;
+let lastLiveSkipLogAt = 0;
+
+function isLiveWriteAllowed(set: any, get: any, label: string): boolean {
+  if (get().status !== "connected") return false;
+  if (get().liveEnabled) return true;
+  const now = Date.now();
+  if (now - lastLiveSkipLogAt > LIVE_SKIP_LOG_INTERVAL_MS) {
+    lastLiveSkipLogAt = now;
+    appendLog(set, get, { dir: "SYS", label: "live edit paused", data: `${label} tidak dikirim karena LIVE OFF` });
+  }
+  return false;
+}
+
+function enableLiveRamAfterSync(set: any, get: any) {
+  if (get().status !== "connected") return;
+  if (!get().liveEnabled) {
+    set({ liveEnabled: true });
+    appendLog(set, get, { dir: "SYS", label: "LIVE EDIT AUTO ON", data: "connect berhasil — perubahan fader/PEQ langsung dikirim ke RAM device" });
+  }
+}
 
 /** Convert a BT-framed command (AA len8 body cs) into the USB HID framing
  *  (AA len16LE body cs) observed in the USB sniff. */
@@ -141,6 +162,27 @@ function tryBridgeConnect(mode: "bt" | "usb", set: any, get: any): Promise<strin
       }
     };
   });
+}
+
+// Raw device scalar bytes (live 0x00..0x3F), seeded at connect readback and
+// refreshed before stale block writes. Rarely-edited fields in live command
+// blocks are mirrored from here so we can never overwrite a device setting
+// with a wrong model value (see buildTopMusicBlock).
+let deviceScalarCache: Uint8Array | null = null;
+let deviceScalarCacheAt = 0;
+const SCALAR_CACHE_TTL_MS = 4000;
+
+async function refreshDeviceScalars(set: any, get: any): Promise<void> {
+  if (Date.now() - deviceScalarCacheAt < SCALAR_CACHE_TTL_MS) return;
+  try {
+    const res = await requestResponse(buildReadBlock(0x0000, 0x40), "Refresh scalar cache 0x00..0x3F", 0xbf, set, get, 2000);
+    if (res.checksumOk && res.data.length >= 0x40) {
+      deviceScalarCache = new Uint8Array(res.data.slice(0, 0x40));
+      deviceScalarCacheAt = Date.now();
+    }
+  } catch {
+    // keep the previous cache; a stale mirror is still device truth
+  }
 }
 
 const SPP_SERVICE_CLASS = "00001101-0000-1000-8000-00805f9b34fb";
@@ -324,6 +366,8 @@ async function syncFromDevice(set: any, get: any) {
       await sleep(35);
     }
 
+    deviceScalarCache = new Uint8Array(memory.slice(0, 0x40));
+    deviceScalarCacheAt = Date.now();
     await importLiveMemoryIntoStudio(memory);
     set({ lastError: null });
     appendLog(set, get, { dir: "SYS", label: "sync complete", data: `${memory.length} bytes loaded into editor` });
@@ -715,7 +759,7 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
   connect: async () => {
     const preferred = get().transportMode;
     await closeInternal();
-    set({ status: "connecting", lastError: null, portLabel: "Smart auto-scan..." });
+    set({ status: "connecting", liveEnabled: false, lastError: null, portLabel: "Smart auto-scan..." });
     try {
       // Path 1 — native bridge (zero popup, true auto-discovery). Only falls
       // through to the browser APIs when no bridge is running on this machine.
@@ -725,6 +769,7 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
         appendLog(set, get, { dir: "SYS", label: "connected", data: `${bridgeLabel} — dipilih otomatis oleh native bridge` });
         startHeartbeatLoop(set, get);
         await syncFromDevice(set, get);
+        enableLiveRamAfterSync(set, get);
         return;
       }
       appendLog(set, get, { dir: "SYS", label: "bridge offline", data: "k500-bridge tidak berjalan — fallback ke izin browser (jalankan `npm run dev` terbaru / `npm run bridge`)" });
@@ -751,11 +796,12 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
       appendLog(set, get, { dir: "SYS", label: "connected", data: transportDescription(connectedMode) });
       startHeartbeatLoop(set, get);
       await syncFromDevice(set, get);
+      enableLiveRamAfterSync(set, get);
     } catch (err) {
       await closeInternal();
       const cancelled = (err as any)?.name === "NotFoundError";
       const message = cancelled ? "Pemilihan port/device dibatalkan." : err instanceof Error ? err.message : String(err);
-      set({ status: cancelled ? "disconnected" : "error", lastError: cancelled ? null : message, portLabel: "No port" });
+      set({ status: cancelled ? "disconnected" : "error", liveEnabled: false, lastError: cancelled ? null : message, portLabel: "No port" });
       appendLog(set, get, { dir: cancelled ? "SYS" : "ERR", label: cancelled ? "permission cancelled" : "connect failed", data: message });
     }
   },
@@ -781,13 +827,13 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
   },
 
   sendEqBand: async (eqKey, bandIndexZeroBased, band) => {
-    if (!get().liveEnabled || get().status !== "connected") return;
+    if (!isLiveWriteAllowed(set, get, `EQ ${eqKey} B${bandIndexZeroBased + 1}`)) return;
     // Coalesced + throttled so DAW-style node dragging never floods the BT link.
     queueEqBandWrite(eqKey, bandIndexZeroBased, band, set, get);
   },
 
   sendPathUpdate: async (path, preset) => {
-    if (!get().liveEnabled || get().status !== "connected") return;
+    if (!isLiveWriteAllowed(set, get, path)) return;
     try {
       const outputSection = outputPathToSection(path);
       if (outputSection) {
@@ -805,15 +851,18 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
         return;
       }
       if (TOP_MUSIC_BLOCK_PATHS.has(path)) {
-        queueLiveBlockWrite("top:music", buildTopMusicBlock(preset), `Top Music block · ${describeLivePath(path)}`, set, get);
+        await refreshDeviceScalars(set, get);
+        queueLiveBlockWrite("top:music", buildTopMusicBlock(preset, deviceScalarCache), `Top Music block · ${describeLivePath(path)}`, set, get);
         return;
       }
       if (TOP_MIC_BLOCK_PATHS.has(path)) {
-        queueLiveBlockWrite("top:mic", buildTopMicBlock(preset), `Top Mic block · ${describeLivePath(path)}`, set, get);
+        await refreshDeviceScalars(set, get);
+        queueLiveBlockWrite("top:mic", buildTopMicBlock(preset, deviceScalarCache), `Top Mic block · ${describeLivePath(path)}`, set, get);
         return;
       }
       if (TOP_EFFECT_BLOCK_PATHS.has(path)) {
-        queueLiveBlockWrite("top:effect", buildTopEffectBlock(preset), `Top Effect block · ${describeLivePath(path)}`, set, get);
+        await refreshDeviceScalars(set, get);
+        queueLiveBlockWrite("top:effect", buildTopEffectBlock(preset, deviceScalarCache), `Top Effect block · ${describeLivePath(path)}`, set, get);
         return;
       }
       appendLog(set, get, { dir: "SYS", label: `live path not mapped yet`, data: path });
@@ -892,6 +941,8 @@ function enqueueWrite(frame: Uint8Array, label: string, set: any, get: any): Pro
 
 async function closeInternal(): Promise<void> {
   readAbort = true;
+  deviceScalarCache = null;
+  deviceScalarCacheAt = 0;
   if (bridgeWs) {
     const ws = bridgeWs;
     bridgeWs = null;

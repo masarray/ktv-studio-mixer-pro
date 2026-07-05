@@ -106,11 +106,11 @@ export function MasterSection() {
         right={<Led color="amber" />}
       >
         <div className="flex items-stretch justify-around gap-2">
-          <VerticalFader label="MUSIC" value={preset.system.topMusicVol} min={0} max={100}
+          <VerticalFader label="MUSIC" value={preset.system.topMusicVol} min={0} max={84}
             onChange={(v) => setPath("system.topMusicVol", v)} height={126} />
-          <VerticalFader label="MIC" value={preset.system.topMicVol} min={0} max={100}
+          <VerticalFader label="MIC" value={preset.system.topMicVol} min={0} max={84}
             onChange={(v) => setPath("system.topMicVol", v)} height={126} active />
-          <VerticalFader label="FX" value={preset.system.topEffectVol} min={0} max={100}
+          <VerticalFader label="FX" value={preset.system.topEffectVol} min={0} max={84}
             onChange={(v) => setPath("system.topEffectVol", v)} height={126} />
         </div>
       </Panel>

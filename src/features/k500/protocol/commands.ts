@@ -188,50 +188,97 @@ function musicSourceRaw(preset: Preset): number {
   return clamp(Number(preset.music.sourceRaw ?? 2), 0, 4);
 }
 
-export function buildTopMusicBlock(preset: Preset): Uint8Array {
+/** Master volume range on the device: 0..84 (0x54), verified from the native
+ *  UI and the Master_Music_Vol sniffs (max frame value 0x54). */
+export const TOP_VOL_MAX = 84;
+
+/**
+ * Music block CMD 0x02 — layout verified byte-for-byte against the
+ * Master_Music_Vol_84_to_min_0 / _0_to_max_84 USB sniffs (06.07.2026),
+ * cross-correlated with the USB_Connect readback (04.07.2026) where the
+ * gains at live 0x16..0x1A read 09 09 09 08 08 = -3,-3,-3,-4,-4 exactly as
+ * the native Music tab showed:
+ *
+ *   AA 0D 00 02 [vol] [init] [max] [src] [g1 g2 gBT gUD gDig] [key+7] [gate] [type] CS
+ *
+ * v0.8.16 sent topMicVol/topEffectVol/micMaxVol/musicInitVol into positions
+ * [1][2][10][11]. Position [10] is the noise gate (sniff/native UI: OFF =
+ * 0x00); writing micMaxVol=84 there gated ALL music audio — the permanent
+ * mute bug. Rarely-edited fields ([1][2][10][11]) are therefore mirrored
+ * from the device's own scalar bytes (connect readback / refresh), never
+ * from possibly-misparsed model fields.
+ *
+ * `deviceScalars` = raw live bytes 0x00..0x3F from the device.
+ */
+export function buildTopMusicBlock(preset: Preset, deviceScalars: Uint8Array | null): Uint8Array {
   const s = preset.system;
-  // Reverse-engineered live command block family. The first byte is top music volume.
+  const raw = (liveOff: number, fallback: number) =>
+    deviceScalars && liveOff < deviceScalars.length ? deviceScalars[liveOff] : fallback;
   return buildFrame([
     0x0d,
     0x02,
-    byte(s.topMusicVol),
-    byte(s.topMicVol),
-    byte(s.topEffectVol),
-    byte(musicSourceRaw(preset)),
-    byte(preset.music.input1GainDb + 12),
+    byte(clamp(s.topMusicVol, 0, TOP_VOL_MAX)),      // [0] master music volume
+    raw(0x03, byte(s.musicInitVol)),                  // [1] music init vol (device-mirrored)
+    raw(0x04, TOP_VOL_MAX),                           // [2] music max vol (device-mirrored)
+    byte(musicSourceRaw(preset)),                     // [3] active source (BT=0x02, ...)
+    byte(preset.music.input1GainDb + 12),             // [4..8] gains, encoding gain+12
     byte(preset.music.input2GainDb + 12),
     byte(preset.music.btGainDb + 12),
     byte(preset.music.uDiskGainDb + 12),
     byte(preset.music.digitalGainDb + 12),
-    byte(preset.music.key + 7),
-    byte(s.micMaxVol),
-    byte(s.musicInitVol),
+    byte(preset.music.key + 7),                       // [9] music key + 7
+    raw(0x1b, 0x00),                                  // [10] noise gate (device-mirrored; 0x00 = OFF)
+    raw(0x07, 0x02),                                  // [11] filter type code (device-mirrored)
   ]);
 }
 
-export function buildTopMicBlock(preset: Preset): Uint8Array {
+/**
+ * Mic block CMD 0x05 — layout verified byte-for-byte against the
+ * Master_Mic_Vol_84_to_min_0 / _0_to_max_84 USB sniffs (06.07.2026),
+ * cross-correlated with the USB_Connect readback: constants 19 54 0b 60 60
+ * 26 03 0a 02 map exactly to live 0x0A (micInit=25), 0x0B (micMax=84),
+ * 0x0E, 0x0C/0x0D (micA/micB vol = 96/96 as in the native UI), and the
+ * verified compressor encodings (TH -12 → +50 = 0x26, ratio 3, attack 10,
+ * release 0.2 s → ×10 = 2):
+ *
+ *   AA 0E 00 05 [vol] [init] [max] [x0E] [00] [00] [micA] [micB]
+ *               [compTH+50] [ratio] [attack] [rel×10] [00] CS
+ *
+ * The previous builder put topMusicVol/topEffectVol at [1][2] (device fields
+ * micInit/micMax), micAVol at [3] (unknown device field), micBVol at [6][7],
+ * and eqLink at [12] — every mic fader move corrupted five device fields.
+ * Rarely-edited fields are mirrored from the device scalar cache.
+ */
+export function buildTopMicBlock(preset: Preset, deviceScalars: Uint8Array | null): Uint8Array {
   const m = preset.mic;
-  // Confirmed block family from Mic volume capture; byte 0 is top/mic current volume.
+  const raw = (liveOff: number, fallback: number) =>
+    deviceScalars && liveOff < deviceScalars.length ? deviceScalars[liveOff] : fallback;
   return buildFrame([
     0x0e,
     0x05,
-    byte(preset.system.topMicVol),
-    byte(preset.system.topMusicVol),
-    byte(preset.system.topEffectVol),
-    byte(m.micAVol),
-    0x00,
-    0x00,
-    byte(m.micBVol),
-    byte(m.micBVol),
-    byte(m.compThresholdDb + 50),
-    byte(m.compRatio),
-    byte(m.attackMs),
-    byte(Math.round(m.releaseSec * 10)),
-    byte(m.eqLink ? 1 : 0),
+    byte(clamp(preset.system.topMicVol, 0, TOP_VOL_MAX)), // [0] master mic volume
+    raw(0x0a, byte(preset.system.micInitVol)),            // [1] mic init vol (device-mirrored)
+    raw(0x0b, TOP_VOL_MAX),                               // [2] mic max vol (device-mirrored)
+    raw(0x0e, 0x0b),                                      // [3] unknown field (device-mirrored)
+    0x00,                                                 // [4] 0x00 in all sniffed frames
+    0x00,                                                 // [5] 0x00 in all sniffed frames
+    byte(m.micAVol),                                      // [6] mic A input volume (live 0x0C)
+    byte(m.micBVol),                                      // [7] mic B input volume (live 0x0D)
+    byte(m.compThresholdDb + 50),                         // [8] comp threshold, TH+50
+    byte(m.compRatio),                                    // [9] comp ratio
+    byte(m.attackMs),                                     // [10] comp attack ms
+    byte(Math.round(m.releaseSec * 10)),                  // [11] comp release ×10
+    0x00,                                                 // [12] 0x00 in all sniffed frames (NOT eqLink)
   ]);
 }
 
-export function buildTopEffectBlock(preset: Preset): Uint8Array {
-  // Confirmed from Effect volume capture: AA 03 09 <topFx> <init/current> CS.
-  return buildFrame([0x03, 0x09, byte(preset.system.topEffectVol), byte(preset.system.effectInitLevel)]);
+/**
+ * Effect block CMD 0x09 — verified against Master_Effect_Vol sniffs
+ * (06.07.2026): AA 03 00 09 [vol] [effectInit] CS, effectInit = live 0x15
+ * (0x19 = 25 in both sessions). Init is device-mirrored so a stale model
+ * value can never overwrite it.
+ */
+export function buildTopEffectBlock(preset: Preset, deviceScalars: Uint8Array | null): Uint8Array {
+  const init = deviceScalars && deviceScalars.length > 0x15 ? deviceScalars[0x15] : byte(preset.system.effectInitLevel);
+  return buildFrame([0x03, 0x09, byte(clamp(preset.system.topEffectVol, 0, TOP_VOL_MAX)), init]);
 }

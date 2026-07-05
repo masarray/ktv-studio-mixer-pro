@@ -1069,74 +1069,103 @@ html, body, #app { height: 100%; overflow: hidden; }
   }
 }
 
-/* K500 v0.8.15 — System page senior cleanup.
-   Keep exactly 10 device slots visible, remove redundant status copy, and use
-   native KTV 0..84 range for Volume Config startup faders. UI-only: bridge,
-   BT/USB heartbeat, sync/readback, and live mapping are untouched. */
-.system-device-titlebar {
-  min-height: 24px;
-  display: flex;
+/* K500 v0.8.15 — System workflow cleanup.
+   Remove redundant microcopy, force all 10 device preset slots visible, and
+   match native System Volume Config travel: volume max is 84, record max is 6,
+   dance time max is 30s. UI-only; do not touch native bridge/BT/USB/live mapping. */
+.system-panel-compact-head,
+.system-device-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  padding-bottom: 0;
+  gap: 10px;
+  min-height: 28px;
 }
-.system-device-panel .system-panel-summary,
-.system-device-panel .system-active-pill {
-  display: none !important;
+.system-panel-compact-head .led-cyan,
+.system-device-heading .led-cyan {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
 }
-.system-device-panel > header {
-  min-height: 43px !important;
-}
-.system-device-panel > div:last-child {
-  gap: 7px !important;
+.system-device-heading .system-active-pill {
+  padding: 4px 8px;
+  font-size: 8.5px;
 }
 .system-device-list {
-  flex: 0 0 auto !important;
-  height: 250px !important;
-  min-height: 250px !important;
-  max-height: 250px !important;
+  height: 238px !important;
+  min-height: 238px !important;
+  max-height: 238px !important;
   overflow: hidden !important;
   padding: 7px !important;
 }
 .system-device-list .system-preset-row {
-  min-height: 21px !important;
-  height: 21px !important;
+  min-height: 20px !important;
+  height: 20px !important;
   margin-bottom: 2px !important;
-  padding-inline: 7px !important;
-  grid-template-columns: 24px minmax(0, 1fr) 52px !important;
+  padding-inline: 6px !important;
+  border-radius: 6px !important;
+  grid-template-columns: 24px minmax(0, 1fr) 46px !important;
+  gap: 6px !important;
+}
+.system-device-list .system-preset-row:last-child {
+  margin-bottom: 0 !important;
 }
 .system-device-list .system-preset-row .slot {
   font-size: 10px !important;
 }
 .system-device-list .system-preset-row .name {
-  font-size: 9.5px !important;
+  font-size: 9.7px !important;
+  letter-spacing: -.01em;
 }
 .system-device-list .system-preset-row .tag {
   font-size: 8px !important;
+  text-align: right;
+  letter-spacing: .04em;
 }
-.system-device-panel .system-field > span {
-  letter-spacing: .14em;
+.system-device-panel .system-field > span,
+.system-pc-panel .system-field > span {
+  font-size: 8.5px;
 }
 .system-device-panel .system-input {
-  height: 28px;
+  height: 27px;
+  font-size: 10.5px;
 }
 .system-device-panel .system-check {
   min-height: 20px;
   padding: 2px 6px;
   font-size: 9px;
 }
-.system-device-panel .system-btn {
-  min-height: 27px;
+.system-device-panel .system-btn,
+.system-pc-panel .system-btn {
+  min-height: 26px;
+  font-size: 10px;
+}
+.system-empty-state {
+  min-height: 120px !important;
+  gap: 6px !important;
+  padding: 14px !important;
+}
+.system-empty-state p:last-child {
+  display: none;
+}
+.system-status-line,
+.system-panel-summary {
+  display: none !important;
 }
 @media (max-width: 1420px) {
   .system-device-list {
-    height: 238px !important;
-    min-height: 238px !important;
-    max-height: 238px !important;
+    height: 224px !important;
+    min-height: 224px !important;
+    max-height: 224px !important;
     padding: 6px !important;
   }
   .system-device-list .system-preset-row {
-    min-height: 20px !important;
-    height: 20px !important;
+    min-height: 19px !important;
+    height: 19px !important;
     margin-bottom: 2px !important;
+    grid-template-columns: 23px minmax(0, 1fr) 43px !important;
+  }
+  .system-device-list .system-preset-row .name {
+    font-size: 9.4px !important;
   }
 }

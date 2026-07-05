@@ -628,11 +628,8 @@ export function SystemPage() {
         className="system-pc-panel h-full min-h-0"
         bodyClassName="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden"
       >
-        <div className="system-panel-summary shrink-0">
-          <div className="min-w-0">
-            <div className="font-display led-cyan text-sm font-semibold truncate">PC PRESET ROOT</div>
-            <div className="eyebrow mt-1 truncate" title={pc.root || pc.status}>{pc.root || pc.status}</div>
-          </div>
+        <div className="system-panel-compact-head shrink-0">
+          <div className="font-display led-cyan truncate" title={pc.root || pc.status}>{pc.root || "PC PRESET ROOT"}</div>
           <SystemButton active onClick={pc.refresh}>Refresh</SystemButton>
         </div>
 
@@ -654,14 +651,12 @@ export function SystemPage() {
             );
           }) : (
             <div className="system-empty-state">
-              <div className="font-display led-amber">NO PC PRESET FILE</div>
+              <div className="font-display led-amber">NO .K500 FILE</div>
               <p>{pc.status}</p>
-              <p>Letakkan file <b>.k500</b> satu folder dengan app/bridge root agar muncul di sini.</p>
             </div>
           )}
         </div>
 
-        <div className="system-status-line shrink-0 truncate" title={pc.status}>{pc.status}</div>
         <div className="grid grid-cols-3 gap-2 shrink-0">
           <SystemButton onClick={pc.saveCurrent}>Save to PC</SystemButton>
           <SystemButton disabled title="Upload permanen ke device belum diaktifkan sampai command store diverifikasi.">Upload to device</SystemButton>
@@ -675,11 +670,12 @@ export function SystemPage() {
         className="system-device-panel h-full min-h-0"
         bodyClassName="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden"
       >
-        <div className="system-device-titlebar shrink-0">
-          <div className="font-display led-cyan text-sm font-semibold truncate">{activeModeIndex} · {activeModeName}</div>
+        <div className="system-device-heading shrink-0">
+          <span className="font-display led-cyan truncate">{activeModeIndex} · {activeModeName}</span>
+          <span className="system-active-pill">ACTIVE</span>
         </div>
 
-        <div className="system-preset-list system-device-list panel-inset flex-1 min-h-0 overflow-hidden p-2">
+        <div className="system-preset-list system-device-list panel-inset shrink-0 overflow-hidden p-2">
           {modeNames.map((name, idx) => {
             const slot = idx + 1;
             const active = slot === activeModeIndex || normalizeModeName(name) === normalizeModeName(preset.name);
@@ -764,8 +760,8 @@ export function SystemPage() {
         bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible"
       >
         <FaderRow className="w-full justify-evenly gap-8">
-          <VerticalFader label="UDISK REC" value={s.uDiskRecordVol} min={1} max={12} onChange={(v) => setPath("system.uDiskRecordVol", v)} height={150} />
-          <VerticalFader label="USB REC" value={s.usbRecordVol} min={1} max={12} onChange={(v) => setPath("system.usbRecordVol", v)} active height={150} />
+          <VerticalFader label="UDISK REC" value={s.uDiskRecordVol} min={1} max={6} onChange={(v) => setPath("system.uDiskRecordVol", v)} height={150} />
+          <VerticalFader label="USB REC" value={s.usbRecordVol} min={1} max={6} onChange={(v) => setPath("system.usbRecordVol", v)} active height={150} />
         </FaderRow>
       </Panel>
 
@@ -777,7 +773,7 @@ export function SystemPage() {
       >
         <FaderRow className="w-full justify-evenly gap-6">
           <VerticalFader label="MIC THRES" value={s.danceMicThresholdDb ?? -50} min={-80} max={0} unit="dB" onChange={(v) => setPath("system.danceMicThresholdDb", v)} height={150} active />
-          <VerticalFader label="MIC TIME" value={s.danceMicTimeSec ?? 6} min={0} max={20} unit="s" onChange={(v) => setPath("system.danceMicTimeSec", v)} height={150} />
+          <VerticalFader label="MIC TIME" value={s.danceMicTimeSec ?? 6} min={0} max={30} unit="s" onChange={(v) => setPath("system.danceMicTimeSec", v)} height={150} />
         </FaderRow>
       </Panel>
     </div>
