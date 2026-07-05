@@ -165,6 +165,7 @@ function PageContent() {
 
 export function StudioShell() {
   const preset = useStudio((s) => s.preset);
+  const page = useStudio((s) => s.page);
   const importDefaultFlat = useStudio((s) => s.importDefaultFlat);
 
   useEffect(() => {

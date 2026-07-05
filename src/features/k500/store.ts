@@ -52,6 +52,12 @@ function setPathOn(obj: any, path: string, value: any) {
   parent[last] = typeof old === "number" ? Number(value) : value;
 }
 
+
+function encodeMusicSourceRaw(label: string): number {
+  const map: Record<string, number> = { "Input 1": 0, "Input 2": 1, Bluetooth: 2, UDisk: 3, Digital: 4 };
+  return map[label] ?? 2;
+}
+
 function clonePreset(preset: Preset): Preset {
   return structuredClone(preset);
 }
@@ -243,6 +249,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const { preset } = get();
     if (!preset) return;
     preset.music.source = src;
+    preset.music.sourceRaw = encodeMusicSourceRaw(src);
     set({ preset: { ...preset }, dirty: true });
     void useK500Live.getState().sendPathUpdate("music.source", preset);
   },

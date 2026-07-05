@@ -51,6 +51,12 @@ export interface Preset {
     effectInitLevel: number;
     uDiskRecordVol: number;
     usbRecordVol: number;
+    deviceModeIndex: number;
+    deviceModeNames: string[];
+    btName: string;
+    bleName: string;
+    danceMicThresholdDb: number;
+    danceMicTimeSec: number;
   };
   mic: {
     micAVol: number;
@@ -69,6 +75,11 @@ export interface Preset {
     btGainDb: number;
     uDiskGainDb: number;
     digitalGainDb: number;
+    noiseGateDb: number;
+    bassDb: number;
+    midDb: number;
+    midFreqHz: number;
+    trebleDb: number;
   };
   outputs: {
     main: {

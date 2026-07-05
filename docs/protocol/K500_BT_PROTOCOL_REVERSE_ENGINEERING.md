@@ -436,7 +436,7 @@ export interface K500ProtocolClient {
 }
 ```
 
-For the current React/Lovable project, the fastest implementation route is likely:
+For the current React project, the fastest implementation route is likely:
 
 ```text
 Electron + serialport

@@ -29,14 +29,14 @@ export function LiveDevicePill() {
 
   return (
     <div className={cn("panel-inset h-[34px] px-2 flex items-center gap-2 min-w-[470px]", connected && "ring-1 ring-[color:var(--cyan)]/25")}
-      title={unsupported ? "Web Serial/WebHID tidak tersedia. Pakai Chrome/Edge di localhost." : lastError || "K500 Live Sync Alpha · auto-scan"}
+      title={unsupported ? "Web Serial/WebHID tidak tersedia. Pakai Chrome/Edge di localhost." : lastError || "K500 Smart Connect · scans remembered BT + USB first"}
     >
       <div className="flex items-center gap-1.5 shrink-0">
         <Led color={connected ? "green" : error ? "red" : "amber"} on={status !== "disconnected"} />
         <span className="eyebrow text-[9px]">Live Alpha</span>
       </div>
 
-      {/* Transport selector — replaces the native app's USB/BT checkboxes */}
+      {/* Preferred transport. Connect still smart-scans remembered BT + USB before asking permission. */}
       <div className="flex items-center rounded-md border border-border/60 bg-black/30 p-[2px] gap-[2px]" role="tablist" aria-label="Transport">
         <button
           role="tab"
@@ -45,7 +45,7 @@ export function LiveDevicePill() {
           onClick={() => setTransportMode("bt")}
           className={cn("px-1.5 py-[3px] rounded-[5px] text-[9px] font-display inline-flex items-center gap-1 transition-colors",
             transportMode === "bt" ? "bg-[color:var(--cyan)]/15 text-[color:var(--cyan)] shadow-[inset_0_0_0_1px_var(--cyan)]/30" : "text-muted-foreground hover:text-foreground")}
-          title="Bluetooth SPP — auto-scan port yang sudah pernah dipilih"
+          title="Prefer Bluetooth SPP. Smart Connect tetap scan USB remembered juga."
         >
           <Bluetooth size={11} /> BT
         </button>
@@ -56,7 +56,7 @@ export function LiveDevicePill() {
           onClick={() => setTransportMode("usb")}
           className={cn("px-1.5 py-[3px] rounded-[5px] text-[9px] font-display inline-flex items-center gap-1 transition-colors",
             transportMode === "usb" ? "bg-[color:var(--cyan)]/15 text-[color:var(--cyan)] shadow-[inset_0_0_0_1px_var(--cyan)]/30" : "text-muted-foreground hover:text-foreground")}
-          title="USB HID DSP AUDIO — auto-detect VID 10C4 PID 0321"
+          title="Prefer USB HID DSP AUDIO. Smart Connect tetap scan BT remembered juga."
         >
           <Usb size={11} /> USB
         </button>

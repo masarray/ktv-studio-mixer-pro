@@ -78,6 +78,71 @@ function toUsbFrame(btFrame: Uint8Array): Uint8Array {
   return new Uint8Array(out);
 }
 
+// K500 Native Bridge (tools/k500-bridge.mjs, auto-started by `vite dev`):
+// a Node-side scanner that enumerates COM/HID itself — the zero-popup path.
+let bridgeWs: WebSocket | null = null;
+const BRIDGE_URL = "ws://127.0.0.1:8500/k500";
+
+function hexToBytes(h: string): Uint8Array {
+  const clean = h.replace(/\s+/g, "");
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+/** Try the native bridge first. Resolves with a label when connected, null
+ *  when no bridge is running (fall back to Web Serial/WebHID), and throws
+ *  when the bridge is up but the device genuinely can't be found. */
+function tryBridgeConnect(mode: "bt" | "usb", set: any, get: any): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    let ws: WebSocket;
+    try { ws = new WebSocket(BRIDGE_URL); } catch { resolve(null); return; }
+    let settled = false;
+    const dialTimer = window.setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) { settled = true; try { ws.close(); } catch {} resolve(null); }
+    }, 600);
+    // Bridge scan (BT COM sweep) can legitimately take a while.
+    const scanTimer = window.setTimeout(() => {
+      if (!settled) { settled = true; try { ws.close(); } catch {} reject(new Error("Bridge scan timeout (45 s).")); }
+    }, 45000);
+    const finish = (fn: () => void) => { window.clearTimeout(dialTimer); window.clearTimeout(scanTimer); fn(); };
+
+    ws.onopen = () => {
+      appendLog(set, get, { dir: "SYS", label: "native bridge", data: "terhubung ke k500-bridge — scan mandiri tanpa popup browser" });
+      ws.send(JSON.stringify({ t: "connect", mode }));
+    };
+    ws.onmessage = (ev) => {
+      let msg: any;
+      try { msg = JSON.parse(String(ev.data)); } catch { return; }
+      if (msg.t === "status") {
+        set({ portLabel: msg.msg });
+        appendLog(set, get, { dir: "SYS", label: "bridge scan", data: msg.msg });
+      } else if (msg.t === "connected" && !settled) {
+        settled = true;
+        bridgeWs = ws;
+        finish(() => resolve(`${msg.label} · bridge`));
+      } else if (msg.t === "rx") {
+        feedRxBytes(hexToBytes(msg.hex), set, get);
+        set({ lastRx: hexToBytes(msg.hex).length ? msg.hex.replace(/(..)/g, "$1 ").trim() : get().lastRx });
+      } else if (msg.t === "error" && !settled) {
+        settled = true;
+        finish(() => { try { ws.close(); } catch {} reject(new Error(msg.msg)); });
+      }
+    };
+    ws.onerror = () => { if (!settled) { settled = true; finish(() => resolve(null)); } };
+    ws.onclose = () => {
+      if (!settled) { settled = true; finish(() => resolve(null)); return; }
+      if (bridgeWs === ws) {
+        bridgeWs = null;
+        if (get().status === "connected") {
+          set({ status: "disconnected", liveEnabled: false, portLabel: "No port", lastError: "Bridge terputus (dev server restart?)." });
+          appendLog(set, get, { dir: "ERR", label: "bridge closed", data: "koneksi bridge terputus" });
+        }
+      }
+    };
+  });
+}
+
 const SPP_SERVICE_CLASS = "00001101-0000-1000-8000-00805f9b34fb";
 const TRANSPORT_STORAGE_KEY = "k500.transportMode";
 
@@ -277,6 +342,41 @@ function outputPathToSection(path: string): "main" | "surround" | "center" | "su
   return null;
 }
 
+const TOP_MUSIC_BLOCK_PATHS = new Set([
+  "system.topMusicVol",
+  "music.source",
+  "music.key",
+  "music.input1GainDb",
+  "music.input2GainDb",
+  "music.btGainDb",
+  "music.uDiskGainDb",
+  "music.digitalGainDb",
+]);
+
+const TOP_MIC_BLOCK_PATHS = new Set([
+  "system.topMicVol",
+  "mic.micAVol",
+  "mic.micBVol",
+  "mic.compThresholdDb",
+  "mic.compRatio",
+  "mic.attackMs",
+  "mic.releaseSec",
+]);
+
+const TOP_EFFECT_BLOCK_PATHS = new Set([
+  "system.topEffectVol",
+  "system.effectInitLevel",
+]);
+
+function describeLivePath(path: string): string {
+  return path
+    .replace(/^outputs\./, "Output ")
+    .replace(/^music\./, "Music ")
+    .replace(/^mic\./, "Mic ")
+    .replace(/^system\./, "System ")
+    .replace(/\./g, " /");
+}
+
 function serialSupported(): boolean {
   return typeof globalThis !== "undefined"
     && typeof globalThis.navigator !== "undefined"
@@ -338,13 +438,46 @@ async function releaseSerialOnly(): Promise<void> {
   port = null;
 }
 
-async function probeK500(set: any, get: any, timeoutMs = 1500): Promise<boolean> {
-  try {
-    await requestResponse(buildHeartbeat(), "Probe heartbeat 0x1C", 0xe3, set, get, timeoutMs);
-    return true;
-  } catch {
-    return false;
+/** Identify the K500 by protocol. Bluetooth SPP links need warm-up after
+ *  open() (Windows establishes the RFCOMM channel lazily, 2-5 s from idle),
+ *  so the first heartbeat can vanish into the void on a perfectly good port.
+ *  The native app is patient; we retry instead of declaring the port silent
+ *  after a single attempt — that impatience was the main reason the chooser
+ *  kept reappearing even for already-granted KTV ports. */
+async function probeK500(set: any, get: any, timeoutMs = 1500, attempts = 1): Promise<boolean> {
+  for (let i = 0; i < Math.max(1, attempts); i++) {
+    try {
+      await requestResponse(buildHeartbeat(), `Probe heartbeat 0x1C${attempts > 1 ? ` (${i + 1}/${attempts})` : ""}`, 0xe3, set, get, timeoutMs);
+      return true;
+    } catch {
+      if (i < attempts - 1) await sleep(150);
+    }
   }
+  return false;
+}
+
+/** Some paired-but-offline BT devices make open() hang for a long time; cap it
+ *  so a dead entry in the granted list can't stall the whole auto-scan. */
+async function openSerialWithTimeout(p: SerialPort, set: any, get: any, ms = 7000): Promise<void> {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, rej) => {
+    timer = window.setTimeout(() => rej(new Error("open timeout")), ms);
+  });
+  try {
+    await Promise.race([openSerial(p, set, get), timeout]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
+
+// Remember which granted port answered last time so the very first probe on
+// the next Connect is almost always a direct hit.
+const BT_LAST_PORT_KEY = "k500.btLastPortIndex";
+function loadLastPortIndex(): number {
+  try { return Number(window.localStorage.getItem(BT_LAST_PORT_KEY) ?? -1); } catch { return -1; }
+}
+function saveLastPortIndex(i: number) {
+  try { window.localStorage.setItem(BT_LAST_PORT_KEY, String(i)); } catch {}
 }
 
 function serialPortLabel(p: SerialPort): string {
@@ -355,34 +488,50 @@ function serialPortLabel(p: SerialPort): string {
 }
 
 /** BT mode: silently probe every previously-granted port first (zero-dialog
- *  reconnect), then fall back to a chooser filtered to Bluetooth SPP only. */
-async function connectBluetooth(set: any, get: any): Promise<boolean> {
+ *  reconnect). When allowChooser is true, fall back to Chrome's mandatory
+ *  one-time Web Serial chooser. Browser security does not allow selecting a
+ *  first-time Bluetooth serial port by name from JavaScript. */
+async function connectBluetooth(set: any, get: any, allowChooser = true): Promise<boolean> {
   const serial = (globalThis.navigator as any).serial;
 
   const granted: SerialPort[] = await serial.getPorts().catch(() => []);
   if (granted.length) {
-    appendLog(set, get, { dir: "SYS", label: "auto-scan", data: `probing ${granted.length} remembered port(s) for K500 signature` });
-    for (let i = 0; i < granted.length; i++) {
-      set({ portLabel: `Scanning ${i + 1}/${granted.length}...` });
+    // Try the port that answered last time first, then the rest.
+    const lastGood = loadLastPortIndex();
+    const order = granted.map((_, i) => i);
+    if (lastGood >= 0 && lastGood < order.length) {
+      order.splice(order.indexOf(lastGood), 1);
+      order.unshift(lastGood);
+    }
+    appendLog(set, get, { dir: "SYS", label: "auto-scan", data: `probing ${granted.length} remembered port(s), last-known KTV first` });
+    for (let step = 0; step < order.length; step++) {
+      const i = order[step];
+      const isLastGood = i === lastGood;
+      set({ portLabel: `Scanning ${step + 1}/${order.length}...` });
       try {
-        await openSerial(granted[i], set, get);
-        if (await probeK500(set, get, 1400)) {
+        await openSerialWithTimeout(granted[i], set, get, isLastGood ? 9000 : 7000);
+        // BT RFCOMM warm-up: give the known-good port three chances, others two.
+        if (await probeK500(set, get, 1400, isLastGood ? 3 : 2)) {
+          saveLastPortIndex(i);
           set({ portLabel: `${serialPortLabel(granted[i])} · auto` });
           appendLog(set, get, { dir: "SYS", label: "K500 found", data: "auto-connected to remembered port (no chooser)" });
           return true;
         }
-        appendLog(set, get, { dir: "SYS", label: `port ${i + 1} silent`, data: "no 0xE3 status reply, trying next" });
+        appendLog(set, get, { dir: "SYS", label: `port ${step + 1} silent`, data: "no 0xE3 status reply after retries, trying next" });
       } catch {
-        // port busy or vanished — skip
+        // port busy, offline, or vanished — skip quickly
       }
       await releaseSerialOnly();
     }
   }
 
-  // First time (or device moved): one-time chooser, filtered to Bluetooth SPP
-  // so USB-COM clutter is hidden. Browser security requires this single pick;
-  // every later Connect is fully automatic via the granted-port scan above.
-  appendLog(set, get, { dir: "SYS", label: "chooser", data: "pilih port KTV sekali saja — koneksi berikutnya otomatis" });
+  if (!allowChooser) return false;
+
+  // First time (or device moved): one-time chooser. Web Serial cannot choose a
+  // Bluetooth SPP port by device name programmatically, so this is the only
+  // unavoidable manual step in the browser build. Every later Connect is fully
+  // automatic via the granted-port scan above.
+  appendLog(set, get, { dir: "SYS", label: "BT permission", data: "Chrome wajib menampilkan daftar port untuk izin pertama. Pilih KTV_BT sekali saja — berikutnya auto." });
   let picked: SerialPort;
   try {
     picked = await serial.requestPort({ filters: [{ bluetoothServiceClassId: SPP_SERVICE_CLASS }] });
@@ -391,19 +540,25 @@ async function connectBluetooth(set: any, get: any): Promise<boolean> {
     // Older Chromium without BT service-class filters: show unfiltered list.
     picked = await serial.requestPort();
   }
-  await openSerial(picked, set, get);
-  if (!(await probeK500(set, get, 2000))) {
+  await openSerialWithTimeout(picked, set, get, 10000);
+  if (!(await probeK500(set, get, 1600, 4))) {
     await releaseSerialOnly();
     throw new Error("Port terbuka tapi tidak merespon protokol K500 (heartbeat 0x1C tanpa balasan 0xE3). Kemungkinan port SPP lain — klik Connect lagi dan pilih entri KTV_BT satunya.");
   }
+  try {
+    const after: SerialPort[] = await serial.getPorts();
+    const idx = after.indexOf(picked);
+    if (idx >= 0) saveLastPortIndex(idx);
+  } catch {}
   set({ portLabel: serialPortLabel(picked) });
   return true;
 }
 
 /** USB mode: the K500 enumerates as "USB HID DSP AUDIO" (VID 10C4 PID 0321).
  *  Auto-scan matches by VID/PID first, then verifies with the heartbeat probe
- *  — same identify-by-protocol rule as the BT path. */
-async function connectUsbHid(set: any, get: any): Promise<boolean> {
+ *  — same identify-by-protocol rule as the BT path. When allowChooser is false
+ *  this never opens a browser permission dialog. */
+async function connectUsbHid(set: any, get: any, allowChooser = true): Promise<boolean> {
   const hid = (globalThis.navigator as any).hid;
   const isK500 = (d: any) => d.vendorId === K500_USB_VENDOR_ID && d.productId === K500_USB_PRODUCT_ID;
 
@@ -425,7 +580,7 @@ async function connectUsbHid(set: any, get: any): Promise<boolean> {
       };
       hid.addEventListener("disconnect", hidDisconnectListener);
     }
-    const ok = await probeK500(set, get, 1800);
+    const ok = await probeK500(set, get, 1500, 2);
     if (!ok) {
       device.removeEventListener("inputreport", hidInputListener);
       hidInputListener = null;
@@ -452,8 +607,10 @@ async function connectUsbHid(set: any, get: any): Promise<boolean> {
     }
   }
 
+  if (!allowChooser) return false;
+
   // 2) First time: chooser filtered to the DSP AUDIO identity only.
-  appendLog(set, get, { dir: "SYS", label: "chooser USB", data: "pilih USB HID DSP AUDIO sekali saja — berikutnya otomatis" });
+  appendLog(set, get, { dir: "SYS", label: "USB permission", data: "pilih USB HID DSP AUDIO sekali saja — berikutnya otomatis" });
   const devices: any[] = await hid.requestDevice({
     filters: [{ vendorId: K500_USB_VENDOR_ID, productId: K500_USB_PRODUCT_ID }],
   });
@@ -469,6 +626,62 @@ async function connectUsbHid(set: any, get: any): Promise<boolean> {
     }
   }
   throw new Error("USB HID DSP AUDIO terbuka tapi tidak merespon heartbeat. Pastikan aplikasi native tertutup (device HID hanya bisa dipegang satu aplikasi), lalu coba lagi.");
+}
+
+
+type ConnectedTransport = "bt" | "usb";
+
+async function tryTransport(mode: ConnectedTransport, set: any, get: any, allowChooser: boolean): Promise<boolean> {
+  if (mode === "bt") {
+    if (!serialSupported()) return false;
+    return connectBluetooth(set, get, allowChooser);
+  }
+  if (!hidSupported()) return false;
+  return connectUsbHid(set, get, allowChooser);
+}
+
+function transportDescription(mode: ConnectedTransport): string {
+  return mode === "bt" ? "115200 8N1 · Bluetooth SPP" : "USB HID transport";
+}
+
+function preferredSmartOrder(preferred: ConnectedTransport): ConnectedTransport[] {
+  return preferred === "usb" ? ["usb", "bt"] : ["bt", "usb"];
+}
+
+async function smartAutoScan(set: any, get: any, preferred: ConnectedTransport): Promise<ConnectedTransport | null> {
+  const order = preferredSmartOrder(preferred);
+  appendLog(set, get, { dir: "SYS", label: "smart auto-scan", data: `checking remembered ${order.map((m) => m.toUpperCase()).join(" → ")} devices without chooser` });
+
+  for (const mode of order) {
+    set({ portLabel: `Auto ${mode.toUpperCase()} scan...` });
+    try {
+      if (await tryTransport(mode, set, get, false)) return mode;
+    } catch (err) {
+      appendLog(set, get, { dir: "SYS", label: `${mode.toUpperCase()} auto-scan skipped`, data: err instanceof Error ? err.message : String(err) });
+      await closeInternal();
+    }
+  }
+  return null;
+}
+
+async function smartPermissionFallback(set: any, get: any, preferred: ConnectedTransport): Promise<ConnectedTransport> {
+  const canUsb = hidSupported();
+  const canBt = serialSupported();
+  const order = preferredSmartOrder(preferred).filter((mode) => mode === "usb" ? canUsb : canBt);
+
+  for (const mode of order) {
+    set({ portLabel: mode === "usb" ? "Waiting USB HID permission..." : "Waiting BT serial permission..." });
+    try {
+      if (await tryTransport(mode, set, get, true)) return mode;
+    } catch (err: any) {
+      const cancelled = err?.name === "NotFoundError";
+      appendLog(set, get, { dir: cancelled ? "SYS" : "ERR", label: cancelled ? `${mode.toUpperCase()} permission cancelled` : `${mode.toUpperCase()} permission failed`, data: err instanceof Error ? err.message : String(err) });
+      await closeInternal();
+      if (cancelled) throw err;
+    }
+  }
+
+  throw new Error("Tidak ada transport BT/USB yang berhasil connect ke K500.");
 }
 
 export const useK500Live = create<K500LiveState>((set, get) => ({
@@ -500,36 +713,50 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
   },
 
   connect: async () => {
-    const mode = get().transportMode;
-    if (mode === "bt" && !serialSupported()) {
-      const message = "Web Serial API is not available in this browser/session. Use Chrome or Edge on localhost and close the original K500 app.";
-      set({ status: "unsupported", lastError: message });
-      appendLog(set, get, { dir: "ERR", label: "web serial unavailable", data: message });
-      try { window.alert(message); } catch {}
-      return;
-    }
-    if (mode === "usb" && !hidSupported()) {
-      const message = "WebHID API tidak tersedia di browser ini. Pakai Chrome/Edge, atau pindah ke mode BT.";
-      set({ status: "unsupported", lastError: message });
-      appendLog(set, get, { dir: "ERR", label: "webhid unavailable", data: message });
-      return;
-    }
+    const preferred = get().transportMode;
     await closeInternal();
-    set({ status: "connecting", lastError: null, portLabel: "Auto-scanning..." });
+    set({ status: "connecting", lastError: null, portLabel: "Smart auto-scan..." });
     try {
-      if (mode === "bt") await connectBluetooth(set, get);
-      else await connectUsbHid(set, get);
+      // Path 1 — native bridge (zero popup, true auto-discovery). Only falls
+      // through to the browser APIs when no bridge is running on this machine.
+      const bridgeLabel = await tryBridgeConnect(preferred, set, get);
+      if (bridgeLabel) {
+        set({ status: "connected", lastError: null, portLabel: bridgeLabel });
+        appendLog(set, get, { dir: "SYS", label: "connected", data: `${bridgeLabel} — dipilih otomatis oleh native bridge` });
+        startHeartbeatLoop(set, get);
+        await syncFromDevice(set, get);
+        return;
+      }
+      appendLog(set, get, { dir: "SYS", label: "bridge offline", data: "k500-bridge tidak berjalan — fallback ke izin browser (jalankan `npm run dev` terbaru / `npm run bridge`)" });
 
-      set({ status: "connected", lastError: null });
-      appendLog(set, get, { dir: "SYS", label: "connected", data: mode === "bt" ? "115200 8N1 · Bluetooth SPP" : "USB HID transport" });
+      if (!serialSupported() && !hidSupported()) {
+        throw new Error("Web Serial/WebHID tidak tersedia di browser ini dan native bridge tidak berjalan. Jalankan `npm run dev` (bridge ikut hidup) atau pakai Chrome/Edge.");
+      }
+
+      let connectedMode = await smartAutoScan(set, get, preferred);
+
+      if (!connectedMode) {
+        appendLog(set, get, {
+          dir: "SYS",
+          label: "permission needed",
+          data: preferred === "bt"
+            ? "Belum ada izin BT yang tersimpan. Browser wajib menampilkan port chooser sekali; pilih KTV_BT, lalu Connect berikutnya otomatis."
+            : "Belum ada izin USB HID yang tersimpan. Pilih USB HID DSP AUDIO sekali; Connect berikutnya otomatis.",
+        });
+        connectedMode = await smartPermissionFallback(set, get, preferred);
+      }
+
+      set({ status: "connected", lastError: null, transportMode: connectedMode });
+      saveTransportMode(connectedMode);
+      appendLog(set, get, { dir: "SYS", label: "connected", data: transportDescription(connectedMode) });
       startHeartbeatLoop(set, get);
       await syncFromDevice(set, get);
     } catch (err) {
       await closeInternal();
       const cancelled = (err as any)?.name === "NotFoundError";
-      const message = cancelled ? "Pemilihan port dibatalkan." : err instanceof Error ? err.message : String(err);
+      const message = cancelled ? "Pemilihan port/device dibatalkan." : err instanceof Error ? err.message : String(err);
       set({ status: cancelled ? "disconnected" : "error", lastError: cancelled ? null : message, portLabel: "No port" });
-      appendLog(set, get, { dir: cancelled ? "SYS" : "ERR", label: cancelled ? "chooser cancelled" : "connect failed", data: message });
+      appendLog(set, get, { dir: cancelled ? "SYS" : "ERR", label: cancelled ? "permission cancelled" : "connect failed", data: message });
     }
   },
 
@@ -564,25 +791,32 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
     try {
       const outputSection = outputPathToSection(path);
       if (outputSection) {
-        await enqueueWrite(buildOutputBlock(outputSection, preset), `Output block ${outputSection}`, set, get);
+        queueLiveBlockWrite(
+          `output:${outputSection}`,
+          buildOutputBlock(outputSection, preset),
+          `Output block ${outputSection} · ${describeLivePath(path)}`,
+          set,
+          get,
+        );
         return;
       }
       if (path === "mic.eqLink") {
-        await enqueueWrite(buildMicEqLink(preset.mic.eqLink), `Mic EQ Link ${preset.mic.eqLink ? "ON" : "OFF"}`, set, get);
+        queueLiveBlockWrite("mic:eqLink", buildMicEqLink(preset.mic.eqLink), `Mic EQ Link ${preset.mic.eqLink ? "ON" : "OFF"}`, set, get);
         return;
       }
-      if (path === "system.topMusicVol") {
-        await enqueueWrite(buildTopMusicBlock(preset), "Top Music block", set, get);
+      if (TOP_MUSIC_BLOCK_PATHS.has(path)) {
+        queueLiveBlockWrite("top:music", buildTopMusicBlock(preset), `Top Music block · ${describeLivePath(path)}`, set, get);
         return;
       }
-      if (path === "system.topMicVol") {
-        await enqueueWrite(buildTopMicBlock(preset), "Top Mic block", set, get);
+      if (TOP_MIC_BLOCK_PATHS.has(path)) {
+        queueLiveBlockWrite("top:mic", buildTopMicBlock(preset), `Top Mic block · ${describeLivePath(path)}`, set, get);
         return;
       }
-      if (path === "system.topEffectVol") {
-        await enqueueWrite(buildTopEffectBlock(preset), "Top Effect block", set, get);
+      if (TOP_EFFECT_BLOCK_PATHS.has(path)) {
+        queueLiveBlockWrite("top:effect", buildTopEffectBlock(preset), `Top Effect block · ${describeLivePath(path)}`, set, get);
         return;
       }
+      appendLog(set, get, { dir: "SYS", label: `live path not mapped yet`, data: path });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ lastError: message });
@@ -616,6 +850,13 @@ function appendLog(set: any, get: any, line: Omit<LiveLogLine, "ts">) {
 
 async function writeRaw(frame: Uint8Array, label: string, set: any, get: any): Promise<void> {
   const h = hex(frame);
+  if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    // Native bridge owns the transport (and USB re-framing) on the Node side.
+    set({ lastTx: h });
+    appendLog(set, get, { dir: "TX", label: `${label} · bridge`, data: h });
+    bridgeWs.send(JSON.stringify({ t: "tx", hex: Array.from(frame).map((b) => b.toString(16).padStart(2, "0")).join("") }));
+    return;
+  }
   if (hidDevice) {
     // USB HID transport: re-frame for USB (16-bit length) and pad to the
     // 64-byte interrupt report, exactly as in the native-app USB sniff.
@@ -636,7 +877,7 @@ async function writeRaw(frame: Uint8Array, label: string, set: any, get: any): P
 
 function enqueueWrite(frame: Uint8Array, label: string, set: any, get: any): Promise<void> {
   const task = sendQueue.then(async () => {
-    if (!writer && !hidDevice) return;
+    if (!writer && !hidDevice && !(bridgeWs && bridgeWs.readyState === WebSocket.OPEN)) return;
     try {
       await writeRaw(frame, label, set, get);
     } catch (err) {
@@ -651,6 +892,12 @@ function enqueueWrite(frame: Uint8Array, label: string, set: any, get: any): Pro
 
 async function closeInternal(): Promise<void> {
   readAbort = true;
+  if (bridgeWs) {
+    const ws = bridgeWs;
+    bridgeWs = null;
+    try { ws.send(JSON.stringify({ t: "disconnect" })); } catch {}
+    try { ws.close(); } catch {}
+  }
   heartbeatInFlight = false;
   if (hidDisconnectListener) {
     try { (globalThis.navigator as any)?.hid?.removeEventListener("disconnect", hidDisconnectListener); } catch {}
@@ -670,7 +917,12 @@ async function closeInternal(): Promise<void> {
     window.clearTimeout(eqFlushTimer);
     eqFlushTimer = null;
   }
+  if (blockFlushTimer !== null) {
+    window.clearTimeout(blockFlushTimer);
+    blockFlushTimer = null;
+  }
   pendingEqWrites.clear();
+  pendingBlockWrites.clear();
   clearWaiters("Serial port closed");
   rxBuffer = [];
   try { await reader?.cancel(); } catch {}
@@ -681,6 +933,43 @@ async function closeInternal(): Promise<void> {
   try { await port?.close(); } catch {}
   port = null;
   sendQueue = Promise.resolve();
+}
+
+
+// ---------------------------------------------------------------------------
+// Throttled block writes: native K500 edits send complete snapshots for Music,
+// Mic and Output blocks. Range sliders can emit many changes while dragging, so
+// keep only the latest frame per block. This expands live mapping without
+// flooding BT SPP, and USB heartbeat remains independent/direct.
+// ---------------------------------------------------------------------------
+
+const BLOCK_SEND_INTERVAL_MS = 55;
+let blockFlushTimer: number | null = null;
+let lastBlockFlushAt = 0;
+const pendingBlockWrites = new Map<string, { frame: Uint8Array; label: string }>();
+
+function flushBlockWrites(set: any, get: any) {
+  blockFlushTimer = null;
+  lastBlockFlushAt = Date.now();
+  if (get().status !== "connected" || !get().liveEnabled) {
+    pendingBlockWrites.clear();
+    return;
+  }
+  for (const { frame, label } of pendingBlockWrites.values()) {
+    void enqueueWrite(frame, label, set, get);
+  }
+  pendingBlockWrites.clear();
+}
+
+function queueLiveBlockWrite(key: string, frame: Uint8Array, label: string, set: any, get: any) {
+  pendingBlockWrites.set(key, { frame, label });
+  if (blockFlushTimer !== null) return;
+  const elapsed = Date.now() - lastBlockFlushAt;
+  if (elapsed >= BLOCK_SEND_INTERVAL_MS) {
+    flushBlockWrites(set, get);
+  } else {
+    blockFlushTimer = window.setTimeout(() => flushBlockWrites(set, get), BLOCK_SEND_INTERVAL_MS - elapsed);
+  }
 }
 
 // ---------------------------------------------------------------------------

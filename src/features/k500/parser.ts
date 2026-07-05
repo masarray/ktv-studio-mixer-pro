@@ -67,6 +67,25 @@ const SECTIONS_BY_PAGE = Object.freeze({
   echo: ["echo"],
 });
 
+const DEFAULT_DEVICE_MODE_NAMES = Object.freeze([
+  "ARTIST GEN3 ARI",
+  "PODCAST REBORN",
+  "DANGDUT GEN3 ARI",
+  "KARAOKE ARTIST",
+  "AKUSTIK GEN3 ARI",
+  "IMAM QORI GEN 3",
+  "JAZZ GEN3 ARI",
+  "ROCK GEN3 ARI",
+  "MC CERAMAH GEN 3",
+  "ADZAN MEKAH GEN3",
+]);
+
+function defaultDeviceModeIndex(presetName) {
+  const clean = String(presetName || "").trim().toUpperCase();
+  const idx = DEFAULT_DEVICE_MODE_NAMES.findIndex((name) => name.toUpperCase() === clean);
+  return idx >= 0 ? idx + 1 : 4;
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -217,6 +236,12 @@ function parseK500Preset(buffer) {
       effectInitLevel: u8(view, 0x001d),
       uDiskRecordVol: u8(view, 0x0095) + 1,
       usbRecordVol: u8(view, 0x0096) + 1,
+      deviceModeIndex: defaultDeviceModeIndex(readCString(bytes, NAME_OFFSET, NAME_LENGTH)),
+      deviceModeNames: [...DEFAULT_DEVICE_MODE_NAMES],
+      btName: "KTV_BT_00AB12",
+      bleName: "KTV_BLE_00AB12",
+      danceMicThresholdDb: -50,
+      danceMicTimeSec: 6,
     },
     mic: {
       micAVol: u8(view, 0x0014),
@@ -239,6 +264,11 @@ function parseK500Preset(buffer) {
       btGainDb: u8(view, 0x0020) - 12,
       uDiskGainDb: u8(view, 0x0021) - 12,
       digitalGainDb: u8(view, 0x0022) - 12,
+      noiseGateDb: -70,
+      bassDb: 0,
+      midDb: 0,
+      midFreqHz: 1000,
+      trebleDb: 0,
     },
     outputs: {
       main: {

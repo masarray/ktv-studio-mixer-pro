@@ -5,6 +5,19 @@ import type { Preset } from "@/features/k500/types";
 const NAME_OFFSET = 0x0454;
 const NAME_LENGTH = 0x21;
 
+// The native app System page reads the internal K500 equipment-mode names from
+// the active-memory tail. They are fixed-width 16-byte ASCII labels, not a
+// NUL-terminated 33-byte preset name. The previous reader treated 0x02c0 as a
+// C string and over-read into the next slot, producing UI names such as
+// "KARAOKE ARTIST AKUSTIK GEN3..." after Connect.
+const LIVE_MODE_NAMES_OFFSET = 0x0290;
+const LIVE_MODE_NAME_LENGTH = 0x10;
+const LIVE_MODE_NAME_COUNT = 10;
+const LIVE_ACTIVE_MODE_NAME_OFFSET = 0x02c0;
+const LIVE_BT_NAME_OFFSET = 0x0385;
+const LIVE_BLE_NAME_OFFSET = 0x0398;
+const LIVE_BT_NAME_LENGTH = 0x13;
+
 // The live active-memory map omits exactly one byte relative to the .k500 file
 // (the file byte at 0x0097 has no live counterpart). Verified against the
 // COM18 connect capture vs sample.k500:
@@ -82,6 +95,26 @@ function readCString(bytes: Uint8Array, offset: number, length: number): string 
   return new TextDecoder("ascii").decode(usable).replace(/[^\x20-\x7e]/g, "").trim();
 }
 
+function readFixedAscii(bytes: Uint8Array, offset: number, length: number): string {
+  if (offset < 0 || offset >= bytes.length) return "";
+  const slice = bytes.slice(offset, Math.min(bytes.length, offset + length));
+  return new TextDecoder("ascii").decode(slice).replace(/[^\x20-\x7e]/g, "").trim();
+}
+
+function readDeviceModeNames(live: Uint8Array): string[] {
+  const names: string[] = [];
+  for (let i = 0; i < LIVE_MODE_NAME_COUNT; i++) {
+    names.push(readFixedAscii(live, LIVE_MODE_NAMES_OFFSET + i * LIVE_MODE_NAME_LENGTH, LIVE_MODE_NAME_LENGTH));
+  }
+  return names;
+}
+
+function inferDeviceModeIndex(modeNames: string[], activeName: string): number {
+  const clean = activeName.trim().toUpperCase();
+  const idx = modeNames.findIndex((name) => name.trim().toUpperCase() === clean);
+  return idx >= 0 ? idx + 1 : 4;
+}
+
 function writeFixedAscii(bytes: Uint8Array, offset: number, length: number, text: string) {
   const clean = String(text ?? "").replace(/[^\x20-\x7e]/g, "").slice(0, length);
   bytes.fill(0, offset, offset + length);
@@ -152,14 +185,29 @@ export function buildPresetFromLiveMemory(basePresetBytes: Uint8Array, liveMemor
     }
   }
 
-  // Device readback includes the active preset name around 0x02c0 in observed captures.
-  const liveName = readCString(liveMemory, 0x02c0, 0x21);
+  // Device readback includes the active Equipment Mode name in the fixed-width
+  // mode-name table. Keep it fixed-width so the next mode name is not swallowed.
+  const deviceModeNames = readDeviceModeNames(liveMemory);
+  const liveName = readFixedAscii(liveMemory, LIVE_ACTIVE_MODE_NAME_OFFSET, LIVE_MODE_NAME_LENGTH);
   if (liveName) writeFixedAscii(bytes, NAME_OFFSET, NAME_LENGTH, liveName);
 
   // Parse and immediately serialize to normalize checksum and duplicated known fields.
   let preset = parseK500Preset(new Uint8Array(bytes).buffer);
   const normalized = serializeK500Preset(structuredClone(preset));
   preset = parseK500Preset(new Uint8Array(normalized).buffer);
+
+  // Attach device System metadata that exists in active memory but not in the
+  // normal .k500 file body. This lets Connect hydrate the System page like the
+  // native app: Equipment Mode dropdown, BT/BLE names and active mode row.
+  if (deviceModeNames.length) {
+    preset.system.deviceModeNames = deviceModeNames;
+    preset.system.deviceModeIndex = inferDeviceModeIndex(deviceModeNames, liveName || preset.name);
+  }
+  const btName = readCString(liveMemory, LIVE_BT_NAME_OFFSET, LIVE_BT_NAME_LENGTH);
+  const bleName = readCString(liveMemory, LIVE_BLE_NAME_OFFSET, LIVE_BT_NAME_LENGTH);
+  if (btName) preset.system.btName = btName;
+  if (bleName) preset.system.bleName = bleName;
+
   preset.checksumOk = true;
   return preset;
 }

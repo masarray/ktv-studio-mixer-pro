@@ -174,6 +174,20 @@ export function buildMicEqLink(enabled: boolean): Uint8Array {
   return buildFrame(enabled ? [0x04, 0x3c, 0x01, 0x01, 0x9e] : [0x04, 0x3c, 0x00, 0x00, 0xc4]);
 }
 
+
+function musicSourceRaw(preset: Preset): number {
+  const fromLabel: Record<string, number> = {
+    "Input 1": 0,
+    "Input 2": 1,
+    Bluetooth: 2,
+    UDisk: 3,
+    Digital: 4,
+  };
+  const labelRaw = fromLabel[String(preset.music.source)] ;
+  if (labelRaw !== undefined) return labelRaw;
+  return clamp(Number(preset.music.sourceRaw ?? 2), 0, 4);
+}
+
 export function buildTopMusicBlock(preset: Preset): Uint8Array {
   const s = preset.system;
   // Reverse-engineered live command block family. The first byte is top music volume.
@@ -183,7 +197,7 @@ export function buildTopMusicBlock(preset: Preset): Uint8Array {
     byte(s.topMusicVol),
     byte(s.topMicVol),
     byte(s.topEffectVol),
-    byte(preset.music.sourceRaw ?? 2),
+    byte(musicSourceRaw(preset)),
     byte(preset.music.input1GainDb + 12),
     byte(preset.music.input2GainDb + 12),
     byte(preset.music.btGainDb + 12),

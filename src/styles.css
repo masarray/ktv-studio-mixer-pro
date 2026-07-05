@@ -582,3 +582,561 @@ html, body, #app { height: 100%; overflow: hidden; }
 .master-bottom-strip .fader-readout {
   margin-inline: 0 !important;
 }
+
+/* K500 v0.8.9 — native system-page UX restore + fully transparent EQ editor card.
+   UI-only patch: do not touch BT/USB bridge, heartbeat, sync/readback, or live mapping. */
+.eq-floating-card {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  padding: 6px 8px !important;
+}
+.eq-floating-card::before { display: none !important; }
+.eq-floating-card > .flex:first-child {
+  margin-bottom: 6px !important;
+  padding-inline: 2px;
+  text-shadow: 0 1px 3px oklch(0 0 0 / 90%);
+}
+.eq-floating-card .studio-input,
+.eq-floating-card .studio-select {
+  background: oklch(0.055 0.01 250 / 86%) !important;
+  border-color: oklch(0.85 0.14 200 / 18%) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 5%),
+    0 1px 9px oklch(0 0 0 / 38%) !important;
+}
+.eq-floating-card label span {
+  text-shadow: 0 1px 3px oklch(0 0 0 / 85%);
+}
+
+.system-page {
+  grid-template-columns: minmax(430px, 1.14fr) minmax(300px, 0.86fr) minmax(300px, 0.86fr);
+  grid-template-rows: minmax(206px, 1fr) minmax(206px, 1fr) 264px;
+  grid-template-areas:
+    "library profile bluetooth"
+    "library access dance"
+    "startup startup record";
+}
+.system-library-panel { grid-area: library; }
+.system-card { min-height: 0; }
+.system-startup-panel { grid-area: startup; }
+.system-record-panel { grid-area: record; }
+.system-page > .panel-bevel:nth-child(2) { grid-area: profile; }
+.system-page > .panel-bevel:nth-child(3) { grid-area: bluetooth; }
+.system-page > .panel-bevel:nth-child(4) { grid-area: access; }
+.system-page > .panel-bevel:nth-child(5) { grid-area: dance; }
+.system-page .panel-bevel > header {
+  min-height: 50px;
+}
+.system-page .fader-row {
+  align-items: stretch;
+}
+.system-page .fader-strip {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.system-page .fader-readout {
+  margin-top: 2px !important;
+}
+.system-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.system-field > span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.system-input {
+  height: 32px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.system-btn {
+  min-height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.system-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid oklch(1 0 0 / 7%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, oklch(1 0 0 / 3%), oklch(0 0 0 / 13%));
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--foreground);
+}
+.system-check input {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--cyan);
+}
+.system-preset-list {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.85 0.14 200 / 25%) transparent;
+}
+.system-preset-row {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid oklch(1 0 0 / 6%);
+  border-radius: 8px;
+  margin-bottom: 5px;
+  padding: 0 8px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
+  background: linear-gradient(180deg, oklch(1 0 0 / 2.5%), oklch(0 0 0 / 12%));
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 3%);
+  font-family: var(--font-mono);
+}
+.system-preset-row:hover {
+  border-color: oklch(0.85 0.14 200 / 28%);
+  background: linear-gradient(180deg, oklch(0.85 0.14 200 / 8%), oklch(0 0 0 / 12%));
+}
+.system-preset-row.active,
+.system-preset-row.loaded {
+  border-color: oklch(0.85 0.14 200 / 46%);
+  background: linear-gradient(90deg, oklch(0.85 0.14 200 / 13%), oklch(0.82 0.18 78 / 4%));
+}
+.system-preset-row .slot {
+  color: var(--amber);
+  font-weight: 800;
+  text-align: right;
+}
+.system-preset-row .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 10.5px;
+}
+.system-preset-row .tag {
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+@media (max-width: 1420px) {
+  .system-page {
+    grid-template-columns: minmax(390px, 1fr) minmax(285px, .8fr) minmax(285px, .8fr);
+    grid-template-rows: minmax(196px, 1fr) minmax(196px, 1fr) 248px;
+  }
+  .system-page .fader-strip { width: 54px; min-width: 54px; max-width: 54px; }
+}
+
+/* K500 v0.8.10 — System lower rack aligned to Master Strip.
+   UI-only patch: keep native-bridge BT/USB, heartbeat, sync/readback, and live mapping unchanged. */
+:root {
+  --k500-lower-rack-height: 304px;
+}
+.system-page {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) var(--k500-lower-rack-height) !important;
+  align-items: stretch;
+}
+.system-startup-panel,
+.system-record-panel,
+.master-bottom-strip {
+  min-height: 0;
+}
+.system-startup-panel,
+.system-record-panel {
+  height: 100%;
+  align-self: stretch;
+}
+.system-startup-panel > div:last-child,
+.system-record-panel > div:last-child {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}
+.system-startup-panel .fader-row,
+.system-record-panel .fader-row {
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+}
+.system-startup-panel .fader-input,
+.system-record-panel .fader-input,
+.master-bottom-strip .fader-input {
+  min-height: 126px;
+}
+@media (max-width: 1420px) {
+  .system-page {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) var(--k500-lower-rack-height) !important;
+  }
+}
+
+/* K500 v0.8.12 — Senior workflow System page.
+   PC Mode is a real PC-root preset file view. Equipment Mode is the KTV internal
+   device-slot list, not a duplicate dropdown. UI-only for destructive device
+   slot commands: keep native bridge, heartbeat, sync/readback, and live mapping unchanged. */
+.system-page {
+  grid-template-columns: minmax(420px, 1.02fr) minmax(390px, 0.98fr) minmax(300px, 0.78fr) !important;
+  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height) !important;
+  grid-template-areas:
+    "pc device side"
+    "startup startup record" !important;
+  align-items: stretch;
+}
+.system-pc-panel { grid-area: pc; }
+.system-device-panel { grid-area: device; }
+.system-side-stack { grid-area: side; grid-template-rows: minmax(126px, 0.86fr) minmax(132px, 0.98fr) minmax(104px, 0.72fr); }
+.system-startup-panel { grid-area: startup; }
+.system-record-panel { grid-area: record; }
+.system-page > .panel-bevel:nth-child(2),
+.system-page > .panel-bevel:nth-child(3),
+.system-page > .panel-bevel:nth-child(4),
+.system-page > .panel-bevel:nth-child(5) {
+  grid-area: auto;
+}
+.system-pc-panel > header,
+.system-device-panel > header,
+.system-side-card > header {
+  min-height: 47px !important;
+}
+.system-side-card .system-input {
+  height: 28px;
+}
+.system-side-card .system-btn {
+  min-height: 26px;
+}
+.system-side-card .system-check {
+  min-height: 20px;
+  padding: 2px 6px;
+  font-size: 9px;
+}
+.system-panel-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+.system-status-line {
+  min-height: 18px;
+  padding-inline: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: .08em;
+  color: var(--muted-foreground);
+}
+.system-active-pill {
+  align-self: start;
+  border-radius: 999px;
+  border: 1px solid oklch(0.85 0.14 200 / 42%);
+  background: linear-gradient(180deg, oklch(0.85 0.14 200 / 13%), oklch(0 0 0 / 16%));
+  color: var(--cyan);
+  box-shadow: 0 0 14px oklch(0.85 0.14 200 / 18%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  padding: 5px 8px;
+}
+.system-device-list {
+  scrollbar-width: none;
+}
+.system-device-list::-webkit-scrollbar { display: none; }
+.system-device-list .system-preset-row {
+  min-height: 25px;
+  margin-bottom: 4px;
+  border-radius: 7px;
+}
+.system-pc-list .system-preset-row {
+  min-height: 29px;
+}
+.system-preset-row.selected {
+  border-color: oklch(0.82 0.18 78 / 42%);
+  background: linear-gradient(90deg, oklch(0.82 0.18 78 / 12%), oklch(0.85 0.14 200 / 6%));
+}
+.system-preset-row .tag.subdued {
+  color: var(--amber);
+  opacity: .82;
+}
+.system-preset-row .file-ext {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+}
+.system-empty-state {
+  height: 100%;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.system-empty-state b { color: var(--cyan); font-weight: 800; }
+@media (max-width: 1420px) {
+  .system-page {
+    grid-template-columns: minmax(380px, 1fr) minmax(360px, .94fr) minmax(286px, .74fr) !important;
+  }
+  .system-device-list .system-preset-row {
+    min-height: 24px;
+    margin-bottom: 3px;
+  }
+  .system-side-stack { grid-template-rows: minmax(118px, .82fr) minmax(128px, 1fr) minmax(98px, .72fr); }
+}
+
+/* K500 v0.8.13 — System/Music native-parity layout correction.
+   Master Strip stays visible on System. Dance Mode moves to the lower mixer rack.
+   Music page exposes the native-app fields; HPF/LPF controls bind to eq.music.crossover
+   so the yellow HP/LP handles and response graph update from the lower panel. */
+.music-page .rack-panel > div:last-child {
+  min-height: 0;
+}
+.music-inline-slider {
+  min-height: 28px;
+}
+.music-horizontal-range {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--cyan);
+}
+.music-horizontal-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, oklch(0.22 0.012 250), oklch(0.06 0.012 250));
+  box-shadow: inset 0 1px 2px oklch(0 0 0 / 80%), 0 1px 0 oklch(1 0 0 / 9%);
+}
+.music-horizontal-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -5px;
+  border-radius: 5px;
+  border: 1px solid oklch(0.82 0.18 78 / 36%);
+  background: linear-gradient(90deg, oklch(0.22 0.012 250), oklch(0.62 0.015 250), oklch(0.18 0.012 250));
+  box-shadow: 0 1px 4px oklch(0 0 0 / 70%);
+}
+.music-inline-readout {
+  width: 58px;
+  min-width: 58px;
+}
+.music-filter-stack .readout {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.system-page {
+  grid-template-columns: minmax(400px, 1.05fr) minmax(360px, .98fr) minmax(280px, .74fr) !important;
+  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height) !important;
+  grid-template-areas:
+    "pc device side"
+    "startup record dance" !important;
+}
+.system-side-stack {
+  grid-area: side;
+  grid-template-rows: minmax(132px, .82fr) minmax(160px, 1fr) !important;
+}
+.system-dance-panel { grid-area: dance; }
+.system-startup-panel { grid-area: startup; }
+.system-record-panel { grid-area: record; }
+.system-dance-panel,
+.system-startup-panel,
+.system-record-panel,
+.master-bottom-strip {
+  height: var(--k500-lower-rack-height) !important;
+  min-height: var(--k500-lower-rack-height) !important;
+}
+.system-dance-panel > div:last-child,
+.system-startup-panel > div:last-child,
+.system-record-panel > div:last-child {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 1420px) {
+  .music-page {
+    grid-template-columns: minmax(440px, 1fr) 250px 236px !important;
+  }
+  .music-inline-slider {
+    grid-template-columns: 72px 1fr 52px !important;
+    gap: 6px !important;
+  }
+  .system-page {
+    grid-template-columns: minmax(360px, 1fr) minmax(330px, .96fr) minmax(250px, .72fr) !important;
+  }
+}
+
+/* K500 v0.8.14 — music filter no-cut + fixed 10 device slots.
+   UI-only except live-memory slot alignment: keep native bridge, BT/USB heartbeat,
+   sync/readback transport and live mapping commands unchanged. */
+.music-filter-panel > header {
+  min-height: 47px !important;
+}
+.music-filter-panel-body {
+  padding: 12px 14px !important;
+  gap: 9px !important;
+}
+.music-filter-panel-body > label {
+  min-height: 0;
+}
+.music-filter-panel-body .studio-select {
+  height: 30px;
+  font-size: 11px;
+}
+.music-filter-panel-body .eyebrow {
+  font-size: 9px;
+  line-height: 1;
+}
+.music-inline-slider {
+  min-height: 30px;
+}
+.music-inline-field {
+  width: 74px;
+  min-width: 74px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.music-inline-input {
+  width: 100%;
+  height: 26px;
+  padding: 3px 22px 3px 6px;
+  text-align: right;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--amber);
+}
+.music-inline-field span {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted-foreground);
+  opacity: .9;
+}
+.music-inline-input::-webkit-outer-spin-button,
+.music-inline-input::-webkit-inner-spin-button {
+  margin: 0;
+}
+.system-device-list {
+  overflow-y: hidden !important;
+}
+.system-device-list .system-preset-row {
+  min-height: 23px !important;
+  margin-bottom: 3px !important;
+  padding-inline: 7px;
+}
+.system-device-list .system-preset-row .name {
+  font-size: 10px;
+}
+@media (max-width: 1420px) {
+  .music-page {
+    grid-template-columns: minmax(410px, 1fr) 244px 250px !important;
+  }
+  .music-inline-slider {
+    grid-template-columns: 66px 1fr 68px !important;
+    gap: 6px !important;
+  }
+  .music-inline-field {
+    width: 68px;
+    min-width: 68px;
+  }
+  .music-filter-panel-body {
+    padding: 10px 12px !important;
+    gap: 7px !important;
+  }
+  .music-filter-panel-body .studio-select {
+    height: 28px;
+  }
+  .system-device-list .system-preset-row {
+    min-height: 22px !important;
+    margin-bottom: 2px !important;
+  }
+}
+
+/* K500 v0.8.15 — System page senior cleanup.
+   Keep exactly 10 device slots visible, remove redundant status copy, and use
+   native KTV 0..84 range for Volume Config startup faders. UI-only: bridge,
+   BT/USB heartbeat, sync/readback, and live mapping are untouched. */
+.system-device-titlebar {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  padding-bottom: 0;
+}
+.system-device-panel .system-panel-summary,
+.system-device-panel .system-active-pill {
+  display: none !important;
+}
+.system-device-panel > header {
+  min-height: 43px !important;
+}
+.system-device-panel > div:last-child {
+  gap: 7px !important;
+}
+.system-device-list {
+  flex: 0 0 auto !important;
+  height: 250px !important;
+  min-height: 250px !important;
+  max-height: 250px !important;
+  overflow: hidden !important;
+  padding: 7px !important;
+}
+.system-device-list .system-preset-row {
+  min-height: 21px !important;
+  height: 21px !important;
+  margin-bottom: 2px !important;
+  padding-inline: 7px !important;
+  grid-template-columns: 24px minmax(0, 1fr) 52px !important;
+}
+.system-device-list .system-preset-row .slot {
+  font-size: 10px !important;
+}
+.system-device-list .system-preset-row .name {
+  font-size: 9.5px !important;
+}
+.system-device-list .system-preset-row .tag {
+  font-size: 8px !important;
+}
+.system-device-panel .system-field > span {
+  letter-spacing: .14em;
+}
+.system-device-panel .system-input {
+  height: 28px;
+}
+.system-device-panel .system-check {
+  min-height: 20px;
+  padding: 2px 6px;
+  font-size: 9px;
+}
+.system-device-panel .system-btn {
+  min-height: 27px;
+}
+@media (max-width: 1420px) {
+  .system-device-list {
+    height: 238px !important;
+    min-height: 238px !important;
+    max-height: 238px !important;
+    padding: 6px !important;
+  }
+  .system-device-list .system-preset-row {
+    min-height: 20px !important;
+    height: 20px !important;
+    margin-bottom: 2px !important;
+  }
+}
