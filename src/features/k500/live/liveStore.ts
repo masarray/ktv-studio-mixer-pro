@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { EqBand, Preset } from "@/features/k500/types";
-import { buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock } from "@/features/k500/protocol/commands";
+import { EQ_SECTION_ID, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock } from "@/features/k500/protocol/commands";
 import { frameLabel, hex } from "@/features/k500/protocol/frame";
 
 type LiveStatus = "unsupported" | "disconnected" | "connecting" | "connected" | "error";
@@ -828,6 +828,15 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
 
   sendEqBand: async (eqKey, bandIndexZeroBased, band) => {
     if (!isLiveWriteAllowed(set, get, `EQ ${eqKey} B${bandIndexZeroBased + 1}`)) return;
+    if (EQ_SECTION_ID[eqKey] === undefined) {
+      // Alt banks (mainAlt, surroundAlt, ...) have no verified live command —
+      // notify once instead of erroring on every flush tick.
+      if (!notedUnsupportedEqSections.has(eqKey)) {
+        notedUnsupportedEqSections.add(eqKey);
+        appendLog(set, get, { dir: "SYS", label: `EQ ${eqKey} file-only`, data: "section ini belum punya command live terverifikasi — edit tersimpan di preset, tidak dikirim ke device" });
+      }
+      return;
+    }
     // Coalesced + throttled so DAW-style node dragging never floods the BT link.
     queueEqBandWrite(eqKey, bandIndexZeroBased, band, set, get);
   },
@@ -1033,6 +1042,7 @@ function queueLiveBlockWrite(key: string, frame: Uint8Array, label: string, set:
 const EQ_SEND_INTERVAL_MS = 45;
 let eqFlushTimer: number | null = null;
 let lastEqFlushAt = 0;
+const notedUnsupportedEqSections = new Set<string>();
 const pendingEqWrites = new Map<string, { eqKey: string; index: number; band: Pick<EqBand, "type" | "frequencyHz" | "q" | "gainDb"> }>();
 
 function flushEqWrites(set: any, get: any) {

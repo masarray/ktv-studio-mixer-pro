@@ -74,7 +74,10 @@ export function buildEqWrite(eqKey: string, bandIndexZeroBased: number, band: Pi
   const section = EQ_SECTION_ID[eqKey];
   if (section === undefined) throw new Error(`Unsupported EQ live section: ${eqKey}`);
   const [fl, fh] = u16le(band.frequencyHz);
-  const q = byte(Math.round(clamp(band.q, 0.1, 30) * 10));
+  // Live Q is a single byte (Q x 10) — verified across every EQ sniff. Values
+  // above 25.5 would wrap the byte and send garbage Q, so live writes clamp
+  // to 0.1..25.0 (the .k500 file format itself still stores u16 Q).
+  const q = byte(Math.round(clamp(band.q, 0.1, 25) * 10));
   const gain = Number(band.gainDb) || 0;
   const typeSign = eqTypeNibble(String(band.type)) | (gain < 0 ? 0x80 : 0x00);
   const gainMagnitude = byte(Math.round(Math.abs(clamp(gain, -24, 24)) * 10));

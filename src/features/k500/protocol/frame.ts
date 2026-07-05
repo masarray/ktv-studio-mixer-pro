@@ -26,8 +26,14 @@ export function verifyK500Frame(frame: Uint8Array): boolean {
   return sum === 0;
 }
 
+const RSP_LABELS: Record<number, string> = { 0xe3: "STATUS", 0xbf: "READ", 0xfd: "WRITE-ACK" };
+
 export function frameLabel(frame: Uint8Array): string {
   if (frame[0] === 0xaa) return `TX CMD 0x${(frame[2] ?? 0).toString(16).toUpperCase().padStart(2, "0")}`;
-  if (frame[0] === 0x55) return `RX RSP 0x${(frame[3] ?? 0).toString(16).toUpperCase().padStart(2, "0")}`;
+  if (frame[0] === 0x55) {
+    const rsp = frame[3] ?? 0;
+    const name = RSP_LABELS[rsp];
+    return `RX RSP 0x${rsp.toString(16).toUpperCase().padStart(2, "0")}${name ? ` · ${name}` : ""}`;
+  }
   return "RAW";
 }
