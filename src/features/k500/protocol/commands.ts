@@ -96,6 +96,46 @@ export function buildEqWrite(eqKey: string, bandIndexZeroBased: number, band: Pi
   ]);
 }
 
+export type CrossoverLiveKind = "hpf" | "lpf";
+
+const CROSSOVER_LIVE_PARAM: Record<CrossoverLiveKind, number> = Object.freeze({
+  hpf: 0x02,
+  lpf: 0x03,
+});
+
+// Native-app USB sniffs supplied 06/07.07.2026 prove HPF/LPF frequency is
+// NOT a top/music/output block write. It is a compact CMD 0x11 write.
+//
+// BT frame body is 6 bytes:
+//   AA 06 11 [02=HPF|03=LPF] [section] [freq u16 LE] [mode] CS
+//
+// USB HID is produced from that BT frame by toUsbFrame():
+//   AA 06 00 11 [02=HPF|03=LPF] [section] [freq u16 LE] [mode] CS
+//
+// Critical bug fixed in v0.8.22: the previous implementation returned
+// buildFrame([0x11, ...]) without the BT length byte. On USB this was
+// reframed as AA 11 00 ... (length 0x11) and the old BT checksum became a
+// payload byte, exactly matching the broken appclone sniff and capable of
+// corrupting/muting live device state.
+//
+// The last payload byte is not a fixed filter-type constant. The older Music
+// HPF/LPF native sniff used 0x04, while the latest Native_App_HPF sniff uses
+// 0x09. This matches the active Equipment Mode / preset slot byte, so live
+// crossover writes must use preset.system.deviceModeIndex rather than a
+// hardcoded 0x04.
+function crossoverModeByte(modeIndex?: number): number {
+  return byte(clamp(Number(modeIndex) || 4, 1, 10));
+}
+
+export function buildCrossoverWrite(eqKey: string, kind: CrossoverLiveKind, hz: number, modeIndex?: number): Uint8Array {
+  const section = EQ_SECTION_ID[eqKey];
+  if (section === undefined) throw new Error(`Unsupported crossover live section: ${eqKey}`);
+  const param = CROSSOVER_LIVE_PARAM[kind];
+  const [fl, fh] = u16le(clamp(hz, 20, 20000));
+  return buildFrame([0x06, 0x11, param, section, fl, fh, crossoverModeByte(modeIndex)]);
+}
+
+
 function outputBaseData(preset: Preset, which: "main" | "surround" | "center" | "sub"): number[] {
   const base = OUTPUT_FILE_BASE[which];
   const source = preset.bytes?.slice(base, base + OUTPUT_DATA_LEN) ?? new Uint8Array(OUTPUT_DATA_LEN);

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { EqBand, Preset } from "@/features/k500/types";
-import { EQ_SECTION_ID, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock } from "@/features/k500/protocol/commands";
+import { EQ_SECTION_ID, buildCrossoverWrite, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock } from "@/features/k500/protocol/commands";
 import { frameLabel, hex } from "@/features/k500/protocol/frame";
 
 type LiveStatus = "unsupported" | "disconnected" | "connecting" | "connected" | "error";
@@ -382,7 +382,51 @@ function outputPathToSection(path: string): "main" | "surround" | "center" | "su
   if (path.startsWith("outputs.main.")) return "main";
   if (path.startsWith("outputs.surround.")) return "surround";
   if (path.startsWith("outputs.center.")) return "center";
+  // Sub HPF/LPF are crossover CMD 0x11, not output-block CMD 0x0E.
+  if (path === "outputs.sub.hpfHz" || path === "outputs.sub.lpfHz") return null;
   if (path.startsWith("outputs.sub.")) return "sub";
+  return null;
+}
+
+type CrossoverLiveWrite = { eqKey: string; kind: "hpf" | "lpf"; hz: number };
+
+function crossoverPathToWrites(path: string, preset: Preset): CrossoverLiveWrite[] | null {
+  const eqMatch = /^eq\.([^.]+)\.crossover\.(hpfHz|lpfHz)$/.exec(path);
+  if (eqMatch) {
+    const eqKey = eqMatch[1];
+    const field = eqMatch[2] as "hpfHz" | "lpfHz";
+    const section = preset.eq[eqKey];
+    if (!section) return null;
+    return [{ eqKey, kind: field === "hpfHz" ? "hpf" : "lpf", hz: section.crossover[field] }];
+  }
+
+  if (path === "mic.hpfHz" || path === "mic.lpfHz") {
+    const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
+    const hz = kind === "hpf" ? preset.mic.hpfHz : preset.mic.lpfHz;
+    // The Mic page exposes one shared HPF/LPF value, while the verified EQ live
+    // section map has Mic A=0x00 and Mic B=0x01. Write both sides so the shared
+    // UI value cannot leave one mic path stale.
+    return ["micA", "micB"].map((eqKey) => ({ eqKey, kind, hz }));
+  }
+
+  if (path === "outputs.sub.hpfHz" || path === "outputs.sub.lpfHz") {
+    const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
+    const hz = kind === "hpf" ? preset.outputs.sub.hpfHz : preset.outputs.sub.lpfHz;
+    return [{ eqKey: "sub", kind, hz }];
+  }
+
+  if (path === "effects.reverb.hpfHz" || path === "effects.reverb.lpfHz") {
+    const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
+    const hz = kind === "hpf" ? preset.effects.reverb.hpfHz : preset.effects.reverb.lpfHz;
+    return [{ eqKey: "reverb", kind, hz }];
+  }
+
+  if (path === "effects.echo.hpfHz" || path === "effects.echo.lpfHz") {
+    const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
+    const hz = kind === "hpf" ? preset.effects.echo.hpfHz : preset.effects.echo.lpfHz;
+    return [{ eqKey: "echo", kind, hz }];
+  }
+
   return null;
 }
 
@@ -844,6 +888,27 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
   sendPathUpdate: async (path, preset) => {
     if (!isLiveWriteAllowed(set, get, path)) return;
     try {
+      const crossoverWrites = crossoverPathToWrites(path, preset);
+      if (crossoverWrites) {
+        for (const write of crossoverWrites) {
+          if (EQ_SECTION_ID[write.eqKey] === undefined) {
+            if (!notedUnsupportedCrossoverSections.has(write.eqKey)) {
+              notedUnsupportedCrossoverSections.add(write.eqKey);
+              appendLog(set, get, { dir: "SYS", label: `Crossover ${write.eqKey} file-only`, data: "section ini belum punya command crossover live terverifikasi — edit tersimpan di preset, tidak dikirim ke device" });
+            }
+            continue;
+          }
+          queueLiveBlockWrite(
+            `xover:${write.eqKey}:${write.kind}`,
+            buildCrossoverWrite(write.eqKey, write.kind, write.hz, preset.system.deviceModeIndex),
+            `Crossover ${write.eqKey} ${write.kind.toUpperCase()} · ${Math.round(write.hz)}Hz`,
+            set,
+            get,
+          );
+        }
+        return;
+      }
+
       const outputSection = outputPathToSection(path);
       if (outputSection) {
         queueLiveBlockWrite(
@@ -1043,6 +1108,7 @@ const EQ_SEND_INTERVAL_MS = 45;
 let eqFlushTimer: number | null = null;
 let lastEqFlushAt = 0;
 const notedUnsupportedEqSections = new Set<string>();
+const notedUnsupportedCrossoverSections = new Set<string>();
 const pendingEqWrites = new Map<string, { eqKey: string; index: number; band: Pick<EqBand, "type" | "frequencyHz" | "q" | "gainDb"> }>();
 
 function flushEqWrites(set: any, get: any) {

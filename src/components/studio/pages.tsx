@@ -140,7 +140,7 @@ export function MicPage() {
       <CompressorPanel title="Vocal Dynamics" pathPrefix="mic" comp={p} includeGate gateDb={p.noiseGateDb} />
       <Panel eyebrow="Filters" title="Band Limits" className="rack-panel h-full">
         <div className="grid grid-cols-1 gap-3">
-          <NumberField label="HPF" unit="Hz" min={20} max={1000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
+          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
           <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
           <Toggle label="Mic EQ Link A↔B" value={p.eqLink} onChange={() => toggle("mic.eqLink")} />
         </div>
@@ -214,7 +214,7 @@ export function MusicPage() {
       <Panel eyebrow="Filters" title="HPF / LPF" className="rack-panel music-filter-panel h-full" bodyClassName="music-filter-panel-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
         <InlineSlider label="LPF" value={c.lpfHz} min={1000} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
         <SelectField label="LP Type" value={c.lpType} options={["LP Butter 12", "LP Butter 24", "LP Bessel 12", "LP Bessel 24", "LP LR 24", "Butter 12", c.lpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.lpType", v)} />
-        <InlineSlider label="HPF" value={c.hpfHz} min={20} max={2000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
+        <InlineSlider label="HPF" value={c.hpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
         <SelectField label="HP Type" value={c.hpType} options={["HP Butter 12", "HP Butter 24", "HP Bessel 12", "HP Bessel 24", "HP LR 24", "Butter 12", c.hpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.hpType", v)} />
       </Panel>
     </div>
@@ -254,7 +254,7 @@ export function OutputPage({ which }: { which: OutKey }) {
     if (which === "main") {
       const c = preset.eq.main.crossover;
       return [
-        { label: "HPF", path: "eq.main.crossover.hpfHz", value: c.hpfHz, min: 20, max: 1000 },
+        { label: "HPF", path: "eq.main.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
         { label: "LPF", path: "eq.main.crossover.lpfHz", value: c.lpfHz, min: 2000, max: 20000 },
       ];
     }
@@ -263,14 +263,14 @@ export function OutputPage({ which }: { which: OutKey }) {
       return [
         { label: "L Delay", unit: "ms", path: "outputs.surround.lDelayMs", value: o.lDelayMs, min: 0, max: 50 },
         { label: "R Delay", unit: "ms", path: "outputs.surround.rDelayMs", value: o.rDelayMs, min: 0, max: 50 },
-        { label: "HPF", path: "eq.surround.crossover.hpfHz", value: c.hpfHz, min: 20, max: 2000 },
+        { label: "HPF", path: "eq.surround.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
         { label: "LPF", path: "eq.surround.crossover.lpfHz", value: c.lpfHz, min: 1000, max: 20000 },
       ];
     }
     if (which === "center") {
       const c = preset.eq.center.crossover;
       return [
-        { label: "HPF", path: "eq.center.crossover.hpfHz", value: c.hpfHz, min: 20, max: 2000 },
+        { label: "HPF", path: "eq.center.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
         { label: "LPF", path: "eq.center.crossover.lpfHz", value: c.lpfHz, min: 1000, max: 20000 },
       ];
     }
@@ -319,7 +319,7 @@ export function ReverbPage() {
       </Panel>
       <Panel eyebrow="Effect filters" title="Tone" className="rack-panel h-full">
         <div className="grid grid-cols-2 gap-3">
-          <NumberField label="HPF" unit="Hz" min={20} max={2000} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
+          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
           <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
         </div>
       </Panel>
@@ -343,7 +343,7 @@ export function EchoPage() {
       </Panel>
       <Panel eyebrow="Delay filters" title="Tone" className="rack-panel h-full">
         <div className="grid grid-cols-2 gap-3">
-          <NumberField label="HPF" unit="Hz" min={20} max={2000} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
+          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
           <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
         </div>
       </Panel>

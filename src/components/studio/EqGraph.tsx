@@ -202,7 +202,7 @@ export function EqGraph() {
         const freq = xToFreq(x);
         const c = section.crossover;
         if (drag.kind === "hp") {
-          setPath(`eq.${section.key}.crossover.hpfHz`, clamp(freq, MIN_FREQ, Math.min(2000, (c?.lpfHz ?? MAX_FREQ) - 10)));
+          setPath(`eq.${section.key}.crossover.hpfHz`, clamp(freq, MIN_FREQ, Math.min(MAX_FREQ, (c?.lpfHz ?? MAX_FREQ) - 10)));
         } else {
           setPath(`eq.${section.key}.crossover.lpfHz`, clamp(freq, Math.max(200, (c?.hpfHz ?? MIN_FREQ) + 10), MAX_FREQ));
         }

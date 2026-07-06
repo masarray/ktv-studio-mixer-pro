@@ -74,6 +74,36 @@ function downloadBytes(bytes: Uint8Array, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function cloneEqBandForLive(band: EqSection["bands"][number]) {
+  return { type: band.type, frequencyHz: band.frequencyHz, q: band.q, gainDb: band.gainDb };
+}
+
+function mirrorEqBand(target: EqSection["bands"][number] | undefined, source: EqSection["bands"][number]) {
+  if (!target) return;
+  target.type = source.type;
+  target.typeRaw = source.typeRaw;
+  target.frequencyHz = source.frequencyHz;
+  target.q = source.q;
+  target.gainDb = source.gainDb;
+}
+
+function applyMicEqLinkMirror(preset: Preset, eqKey: string, bandIndex: number, band: EqSection["bands"][number]) {
+  const writes = [{ eqKey, band: cloneEqBandForLive(band) }];
+  if (preset.mic.eqLink && (eqKey === "micA" || eqKey === "micB")) {
+    const otherKey = eqKey === "micA" ? "micB" : "micA";
+    const otherBand = preset.eq[otherKey]?.bands?.[bandIndex];
+    mirrorEqBand(otherBand, band);
+    if (otherBand) writes.push({ eqKey: otherKey, band: cloneEqBandForLive(otherBand) });
+  }
+  return writes;
+}
+
+function sendEqLiveWrites(writes: Array<{ eqKey: string; band: Pick<EqSection["bands"][number], "type" | "frequencyHz" | "q" | "gainDb"> }>, bandIndex?: number) {
+  const selected = typeof bandIndex === "number" ? bandIndex : useStudio.getState().selectedBand;
+  const live = useK500Live.getState();
+  for (const write of writes) void live.sendEqBand(write.eqKey, selected, write.band);
+}
+
 
 function flattenPreset(preset: Preset): Preset {
   const freq10 = [80, 125, 250, 500, 1000, 2000, 4000, 6300, 10000, 12500];
@@ -210,8 +240,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (field === "frequencyHz") band.frequencyHz = clamp(Math.round(Number(value) || 20), 20, 20000);
     if (field === "q") band.q = clamp(Number(value) || 0.1, 0.1, 30);
     if (field === "gainDb") band.gainDb = clamp(Number(value) || 0, -24, 24);
+    const liveWrites = applyMicEqLinkMirror(preset, eqKey, i, band);
     set({ preset: { ...preset }, dirty: true });
-    void useK500Live.getState().sendEqBand(eqKey, i, band);
+    sendEqLiveWrites(liveWrites, i);
   },
 
   // DAW-style drag updates: apply freq + gain (+ q/type) as ONE state update and
@@ -225,8 +256,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (values.frequencyHz !== undefined) band.frequencyHz = clamp(Math.round(Number(values.frequencyHz) || 20), 20, 20000);
     if (values.q !== undefined) band.q = clamp(Number(values.q) || 0.1, 0.1, 30);
     if (values.gainDb !== undefined) band.gainDb = clamp(Number(values.gainDb) || 0, -24, 24);
+    const liveWrites = applyMicEqLinkMirror(preset, eqKey, i, band);
     set({ preset: { ...preset }, dirty: true });
-    void useK500Live.getState().sendEqBand(eqKey, i, band);
+    sendEqLiveWrites(liveWrites, i);
   },
 
   setPath: (path, value) => {
@@ -283,8 +315,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     const band = preset.eq[eqKey]?.bands?.[selectedBand];
     if (!band) return;
     band.type = "P"; band.frequencyHz = 1000; band.q = 1; band.gainDb = 0;
+    const liveWrites = applyMicEqLinkMirror(preset, eqKey, selectedBand, band);
     set({ preset: { ...preset }, dirty: true });
-    void useK500Live.getState().sendEqBand(eqKey, selectedBand, band);
+    sendEqLiveWrites(liveWrites, selectedBand);
   },
 }));
 
