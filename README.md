@@ -58,3 +58,7 @@ release\sonkupik_karaoke_setup_<version>.exe
 ## Automated release
 
 `.github/workflows/release-windows.yml` builds both artifacts when run manually or when a `v*` tag is pushed. Windows code signing is intentionally not required; signing can be added later through electron-builder environment secrets without changing the app code.
+
+### Dependency/network behavior
+
+The Windows builders use the public npm registry (`https://registry.npmjs.org/`) and automatically remove inaccessible internal registry URLs from `package-lock.json`. If `node_modules` already contains the required build tools, the builder skips `npm ci`, so repeat builds do not require a network connection. Use `-ForceInstall` only when dependencies must be refreshed.

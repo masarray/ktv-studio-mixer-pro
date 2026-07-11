@@ -222,10 +222,10 @@ export function Knob({
             </radialGradient>
           </defs>
           {/* arc track */}
-          <path d="M 18 78 A 36 36 0 1 1 82 78" fill="none" stroke="oklch(0 0 0 / 60%)" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 18 82 A 36 36 0 1 1 82 82" fill="none" stroke="oklch(0 0 0 / 60%)" strokeWidth="4" strokeLinecap="round" />
           {/* arc value */}
           <path
-            d="M 18 78 A 36 36 0 1 1 82 78"
+            d="M 18 82 A 36 36 0 1 1 82 82"
             fill="none"
             stroke="var(--cyan)"
             strokeWidth="4"
@@ -234,9 +234,9 @@ export function Knob({
             strokeDashoffset={170 - t * 170}
             style={{ filter: "drop-shadow(0 0 4px oklch(0.85 0.14 200 / 70%))" }}
           />
-          <circle cx="50" cy="50" r="28" fill="url(#knobFace)" stroke="oklch(0 0 0 / 70%)" />
-          <g transform={`rotate(${angle} 50 50)`}>
-            <line x1="50" y1="26" x2="50" y2="38" stroke="var(--amber)" strokeWidth="3" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 4px oklch(0.82 0.18 78 / 80%))" }} />
+          <circle cx="50" cy="55" r="27" fill="url(#knobFace)" stroke="oklch(0 0 0 / 70%)" />
+          <g transform={`rotate(${angle} 50 55)`}>
+            <line x1="50" y1="32" x2="50" y2="44" stroke="var(--amber)" strokeWidth="3" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 4px oklch(0.82 0.18 78 / 80%))" }} />
           </g>
         </svg>
       </div>

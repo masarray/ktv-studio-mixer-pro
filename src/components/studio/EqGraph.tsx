@@ -372,7 +372,7 @@ export function EqGraph() {
             ))}
             {GRID_DBS.map((db) => (
               <g key={`db${db}`}>
-                <line x1={PAD.left} x2={W - PAD.right} y1={gainToY(db)} y2={gainToY(db)} stroke={db === 0 ? "oklch(0.85 0.14 200 / 55%)" : "oklch(1 0 0 / 5%)"} strokeWidth={db === 0 ? 1.4 : 1} />
+                <line x1={PAD.left} x2={W - PAD.right} y1={gainToY(db)} y2={gainToY(db)} stroke={db === 0 ? "oklch(0.85 0.14 200 / 20%)" : "oklch(1 0 0 / 5%)"} strokeWidth={db === 0 ? 1.1 : 1} />
                 <text x={12} y={gainToY(db) + 3} fill="oklch(0.66 0.018 250)" fontSize="10" fontFamily="JetBrains Mono">{db > 0 ? `+${db}` : db}</text>
               </g>
             ))}
@@ -383,7 +383,9 @@ export function EqGraph() {
             {compositePath && (
               <>
                 <path d={`${compositePath} L ${freqToX(MAX_FREQ).toFixed(2)} ${gainToY(0).toFixed(2)} L ${freqToX(MIN_FREQ).toFixed(2)} ${gainToY(0).toFixed(2)} Z`} fill="url(#eqCompositeFill)" />
-                <path d={compositePath} fill="none" stroke="url(#eqCompositeStroke)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 7px oklch(0.85 0.14 200 / 50%))" }} />
+                {/* Dark separation stroke keeps a completely-flat EQ visible above the 0 dB grid line. */}
+                <path d={compositePath} fill="none" stroke="oklch(0.015 0.004 250 / 88%)" strokeWidth={6.2} strokeLinecap="round" strokeLinejoin="round" />
+                <path d={compositePath} fill="none" stroke="url(#eqCompositeStroke)" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 8px oklch(0.85 0.14 200 / 68%))" }} />
               </>
             )}
             {section.crossover && ([

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$Version = '',
-  [switch]$SkipInstall
+  [switch]$SkipInstall,
+  [switch]$ForceInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,14 +15,16 @@ if ($env:OS -ne 'Windows_NT') {
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js 22 atau lebih baru belum terpasang.'
 }
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+  throw 'npm tidak ditemukan.'
+}
 if ($Version) {
   $CleanVersion = $Version.TrimStart('v')
   npm version $CleanVersion --no-git-tag-version
   if ($LASTEXITCODE -ne 0) { throw 'Gagal menerapkan version release.' }
 }
 if (-not $SkipInstall) {
-  npm ci
-  if ($LASTEXITCODE -ne 0) { throw 'npm ci gagal.' }
+  & (Join-Path $PSScriptRoot 'ensure-node-dependencies.ps1') -ForceInstall:$ForceInstall
 }
 
 npm run build
@@ -29,7 +32,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Production build gagal.' }
 npm run test:desktop-server
 if ($LASTEXITCODE -ne 0) { throw 'Desktop server validation gagal.' }
 
-npx electron-builder --win portable nsis --x64 --publish never
+$ElectronBuilder = Join-Path $RepoRoot 'node_modules\.bin\electron-builder.cmd'
+if (-not (Test-Path $ElectronBuilder)) { throw 'electron-builder lokal tidak ditemukan.' }
+& $ElectronBuilder --win portable nsis --x64 --publish never
 if ($LASTEXITCODE -ne 0) { throw 'Packaging Windows gagal.' }
 
 $Portable = Join-Path $RepoRoot 'release\sonkupik_karaoke.exe'

@@ -2,7 +2,11 @@ appId: com.masari.sonkupik.karaoke
 productName: SONKUPIK STUDIO
 copyright: Copyright © 2026 Mas Ari
 asar: true
-npmRebuild: true
+# node-hid 3.x and serialport 12.x ship Windows N-API binaries. Rebuilding them
+# with node-gyp is unnecessary and makes a normal end-user build require Python
+# plus the full Visual C++ toolchain. Native compatibility is verified by the
+# build script under the actual Electron runtime before packaging.
+npmRebuild: false
 directories:
   output: release
   buildResources: build

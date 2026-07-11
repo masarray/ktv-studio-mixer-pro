@@ -106,6 +106,7 @@ export async function startAppServer({ appRoot, host = "127.0.0.1", port = 0 } =
   }
 
   let origin = "";
+  const sockets = new Set();
   const server = createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url ?? "/", origin);
@@ -120,6 +121,11 @@ export async function startAppServer({ appRoot, host = "127.0.0.1", port = 0 } =
     }
   });
 
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
+
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, resolve);
@@ -130,6 +136,25 @@ export async function startAppServer({ appRoot, host = "127.0.0.1", port = 0 } =
 
   return {
     origin,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    close: () => new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      // Stop accepting new requests first, then proactively close idle HTTP
+      // keep-alive connections. This keeps validation and Electron shutdown
+      // deterministic on Windows/Node 22 instead of waiting forever.
+      server.close(finish);
+      server.closeIdleConnections?.();
+
+      const forceTimer = setTimeout(() => {
+        server.closeAllConnections?.();
+        for (const socket of sockets) socket.destroy();
+        finish();
+      }, 750);
+    }),
   };
 }

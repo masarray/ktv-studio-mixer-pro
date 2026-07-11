@@ -403,14 +403,18 @@ export function OutputPage({ which }: { which: OutKey }) {
         </FaderRow>
       </Panel>
       <CompressorPanel title="Output Compressor" pathPrefix={`outputs.${which}`} comp={o} className="output-dynamics-panel" />
-      <Panel eyebrow="Crossover" title="Band Limits / Delay" className="rack-panel crossover-panel h-full">
-        <div className="grid grid-cols-1 gap-2 crossover-control-stack">
-          {filters.map((f) => (
-            <NumberField key={f.label} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
-              onChange={(v) => setPath(f.path, v)} />
-          ))}
-          <SelectField label="HP Type" value={crossover.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath(`eq.${which}.crossover.hpType`, v)} />
-          <SelectField label="LP Type" value={crossover.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath(`eq.${which}.crossover.lpType`, v)} />
+      <Panel eyebrow="Crossover" title="Band Limits / Delay" className="rack-panel crossover-panel output-band-limit-panel h-full">
+        <div className="output-band-limit-grid">
+          <div className="grid gap-2 crossover-control-stack">
+            {filters.map((f) => (
+              <NumberField key={f.label} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
+                onChange={(v) => setPath(f.path, v)} />
+            ))}
+          </div>
+          <div className="grid gap-2 crossover-control-stack output-band-limit-types">
+            <SelectField label="HP Type" value={crossover.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath(`eq.${which}.crossover.hpType`, v)} />
+            <SelectField label="LP Type" value={crossover.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath(`eq.${which}.crossover.lpType`, v)} />
+          </div>
         </div>
       </Panel>
     </div>
@@ -719,11 +723,137 @@ function usePcPresetLibrary() {
   return { items, root, status, busyFile, refresh, load, readPreset, saveCurrent, setStatus };
 }
 
+function MassUploadDialog({
+  open,
+  items,
+  busy,
+  ready,
+  onClose,
+  onUpload,
+}: {
+  open: boolean;
+  items: PcPresetItem[];
+  busy: boolean;
+  ready: boolean;
+  onClose: () => void;
+  onUpload: (items: PcPresetItem[]) => Promise<void>;
+}) {
+  const [availableFile, setAvailableFile] = useState<string | null>(null);
+  const [queuedFile, setQueuedFile] = useState<string | null>(null);
+  const [queue, setQueue] = useState<PcPresetItem[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQueue(items.slice(0, 10));
+    setAvailableFile(items[0]?.file ?? null);
+    setQueuedFile(null);
+  }, [open, items]);
+
+  if (!open) return null;
+
+  const addItem = (selected: PcPresetItem | undefined) => {
+    if (!selected || queue.some((item) => item.file === selected.file) || queue.length >= 10) return;
+    setQueue((current) => [...current, selected]);
+  };
+  const addSelected = () => addItem(items.find((item) => item.file === availableFile));
+  const addAll = () => {
+    setQueue((current) => {
+      const known = new Set(current.map((item) => item.file));
+      return [...current, ...items.filter((item) => !known.has(item.file))].slice(0, 10);
+    });
+  };
+  const removeSelected = () => {
+    if (!queuedFile) return;
+    setQueue((current) => current.filter((item) => item.file !== queuedFile));
+    setQueuedFile(null);
+  };
+
+  return (
+    <div
+      className="mass-upload-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <section className="mass-upload-dialog panel-bevel" role="dialog" aria-modal="true" aria-label="Mass Upload preset selection">
+        <header className="mass-upload-titlebar">
+          <div>
+            <div className="eyebrow">Device preset transfer</div>
+            <h3 className="font-display">Mass Upload</h3>
+          </div>
+          <button type="button" className="chrome-btn mass-upload-close" disabled={busy} onClick={onClose} aria-label="Close">×</button>
+        </header>
+
+        <div className="mass-upload-workspace">
+          <div className="mass-upload-column">
+            <div className="mass-upload-column-title">PC PRESET FILES</div>
+            <div className="mass-upload-list panel-inset">
+              {items.length ? items.map((item) => (
+                <button
+                  type="button"
+                  key={item.file}
+                  className={cn("mass-upload-row", availableFile === item.file && "selected", queue.some((queued) => queued.file === item.file) && "queued")}
+                  onClick={() => setAvailableFile(item.file)}
+                  onDoubleClick={() => addItem(item)}
+                >
+                  <span>{String(item.slot).padStart(2, "0")}</span>
+                  <strong>{item.name || item.file}</strong>
+                  <em>{queue.some((queued) => queued.file === item.file) ? "ADDED" : ".K500"}</em>
+                </button>
+              )) : <div className="mass-upload-empty">NO .K500 FILE</div>}
+            </div>
+          </div>
+
+          <div className="mass-upload-transfer-actions">
+            <SystemButton disabled={!items.length || queue.length >= 10} onClick={addAll}>Add All</SystemButton>
+            <SystemButton disabled={!availableFile || queue.length >= 10} onClick={addSelected}>Add</SystemButton>
+            <SystemButton disabled={!queuedFile} onClick={removeSelected}>Del</SystemButton>
+          </div>
+
+          <div className="mass-upload-column">
+            <div className="mass-upload-column-title">DEVICE QUEUE · MAX 10</div>
+            <div className="mass-upload-list panel-inset">
+              {queue.length ? queue.map((item, index) => (
+                <button
+                  type="button"
+                  key={item.file}
+                  className={cn("mass-upload-row", queuedFile === item.file && "selected")}
+                  onClick={() => setQueuedFile(item.file)}
+                  onDoubleClick={() => {
+                    setQueue((current) => current.filter((queued) => queued.file !== item.file));
+                    setQueuedFile(null);
+                  }}
+                >
+                  <span>{index + 1}</span>
+                  <strong>{item.name || item.file}</strong>
+                  <em>SLOT {index + 1}</em>
+                </button>
+              )) : <div className="mass-upload-empty">ADD PRESET TO QUEUE</div>}
+            </div>
+          </div>
+        </div>
+
+        <footer className="mass-upload-footer">
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {ready ? `${queue.length}/10 preset · upload native order 10→1` : "Connect USB HID untuk memulai permanent upload"}
+          </span>
+          <div className="flex gap-2">
+            <SystemButton disabled={busy} onClick={onClose}>Cancel</SystemButton>
+            <SystemButton active={busy} disabled={busy || !ready || !queue.length} onClick={() => void onUpload(queue)}>
+              {busy ? "Uploading…" : "Mass Upload"}
+            </SystemButton>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export function SystemPage() {
   const preset = useStudio((s) => s.preset)!;
   const sourceName = useStudio((s) => s.sourceName);
   const setPath = useStudio((s) => s.setPath);
-  const setName = useStudio((s) => s.setName);
   const liveStatus = useK500Live((s) => s.status);
   const useInitVolume = useK500Live((s) => s.useInitVolume);
   const recallBusy = useK500Live((s) => s.recallBusy);
@@ -746,12 +876,12 @@ export function SystemPage() {
   }, [s.deviceModeNames]);
   const activeModeIndex = Math.min(Math.max(Number(s.deviceModeIndex || 4), 1), 10);
   const [selectedModeIndex, setSelectedModeIndex] = useState(activeModeIndex);
+  const [massUploadOpen, setMassUploadOpen] = useState(false);
 
   useEffect(() => {
     setSelectedModeIndex(activeModeIndex);
   }, [activeModeIndex, modeNames.join("|")]);
 
-  const selectedModeName = modeNames[selectedModeIndex - 1] || preset.name || "KARAOKE ARTIST";
   const activeModeName = modeNames[activeModeIndex - 1] || preset.name || "KARAOKE ARTIST";
   const selectedPcFile = pc.items.find((item) => normalizeModeName(item.file) === normalizeModeName(sourceName));
 
@@ -764,8 +894,7 @@ export function SystemPage() {
     pc.setStatus(live.lastError ? `Upload gagal: ${live.lastError}` : `Preset tersimpan ke device slot ${selectedModeIndex}`);
   }, [pc, preset, savePresetToSlot, selectedModeIndex]);
 
-  const massUploadPcLibrary = useCallback(async () => {
-    const source = pc.items.slice(0, 10);
+  const massUploadPcLibrary = useCallback(async (source: PcPresetItem[]) => {
     if (!source.length) {
       pc.setStatus("Tidak ada preset PC untuk Mass Upload.");
       return;
@@ -773,12 +902,14 @@ export function SystemPage() {
     try {
       pc.setStatus(`Reading ${source.length} preset untuk Mass Upload...`);
       const slots = [];
-      for (const item of source) {
-        slots.push({ slotOneBased: item.slot, preset: await pc.readPreset(item.file) });
+      for (let index = 0; index < source.length; index++) {
+        const item = source[index];
+        slots.push({ slotOneBased: index + 1, preset: await pc.readPreset(item.file) });
       }
       await massUploadSlots(slots);
       const live = useK500Live.getState();
       pc.setStatus(live.lastError ? `Mass Upload gagal: ${live.lastError}` : `${source.length} preset dikirim ke device. ${live.storeProgress}`);
+      if (!live.lastError) setMassUploadOpen(false);
     } catch (err) {
       pc.setStatus(err instanceof Error ? err.message : String(err));
     }
@@ -833,9 +964,9 @@ export function SystemPage() {
           </SystemButton>
           <SystemButton
             active={storeBusy}
-            disabled={!permanentStoreReady || pc.items.length === 0}
-            title={transportMode !== "usb" ? "Mass Upload terverifikasi melalui USB HID." : "Upload maksimal 10 file PC ke slot 10→1 lalu Recall slot 1."}
-            onClick={() => void massUploadPcLibrary()}
+            disabled={storeBusy || pc.items.length === 0}
+            title={permanentStoreReady ? "Pilih maksimal 10 preset lalu upload ke slot device." : "Preset dapat dipilih sekarang; permanent upload dimulai setelah USB HID connected."}
+            onClick={() => setMassUploadOpen(true)}
           >
             {storeBusy ? "Uploading…" : "Mass upload"}
           </SystemButton>
@@ -846,14 +977,14 @@ export function SystemPage() {
         eyebrow="Equipment / Device Mode"
         title="Device Preset Slots"
         className="system-device-panel h-full min-h-0"
-        bodyClassName="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden"
+        bodyClassName="system-device-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden"
       >
         <div className="system-device-heading shrink-0">
           <span className="font-display led-cyan truncate">{activeModeIndex} · {activeModeName}</span>
           <span className="system-active-pill">ACTIVE</span>
         </div>
 
-        <div className="system-preset-list system-device-list panel-inset shrink-0 overflow-hidden p-2">
+        <div className="system-preset-list system-device-list panel-inset flex-1 min-h-0 overflow-y-auto p-2">
           {modeNames.map((name, idx) => {
             const slot = idx + 1;
             const active = slot === activeModeIndex;
@@ -873,37 +1004,35 @@ export function SystemPage() {
           })}
         </div>
 
-        <div className="grid grid-cols-[86px_1fr] gap-2 shrink-0 items-end">
-          <SystemTextField label="Slot" value={selectedModeIndex} disabled />
-          <SystemTextField label="Name" value={selectedModeName} onChange={(v) => setName(v)} />
-        </div>
-        <div className="system-critical-options flex flex-wrap gap-2 shrink-0">
-          <SystemCheck
-            label="Use init volume"
-            checked={useInitVolume}
-            disabled={recallBusy || storeBusy || liveStatus !== "connected"}
-            onChange={(v) => void setUseInitVolume(v)}
-          />
-          {(storeBusy || storeProgress) && <span className="system-store-progress">{storeProgress}</span>}
-        </div>
-        <div className="system-critical-actions grid grid-cols-3 gap-2 shrink-0">
-          <SystemButton
-            active={recallBusy}
-            disabled={liveStatus !== "connected" || recallBusy || storeBusy}
-            title={liveStatus !== "connected" ? "Connect ke device dahulu." : "Recall slot terpilih lalu refresh seluruh memory dari device."}
-            onClick={() => void recallMode(selectedModeIndex)}
-          >
-            {recallBusy ? "Recalling…" : "Recall"}
-          </SystemButton>
-          <SystemButton
-            active={storeBusy}
-            disabled={!permanentStoreReady}
-            title={transportMode !== "usb" ? "Save slot permanen terverifikasi melalui USB HID." : `Save preset editor ke slot ${selectedModeIndex}.`}
-            onClick={() => void savePresetToSlot(selectedModeIndex, preset)}
-          >
-            {storeBusy ? "Saving…" : "Save"}
-          </SystemButton>
-          <SystemButton disabled title="Reset all setting belum diaktifkan karena belum ada sniff native yang aman.">Reset all</SystemButton>
+        <div className="system-device-footer shrink-0">
+          <div className="system-critical-options flex flex-wrap gap-2 shrink-0">
+            <SystemCheck
+              label="Use init volume"
+              checked={useInitVolume}
+              disabled={recallBusy || storeBusy || liveStatus !== "connected"}
+              onChange={(v) => void setUseInitVolume(v)}
+            />
+            {(storeBusy || storeProgress) && <span className="system-store-progress">{storeProgress}</span>}
+          </div>
+          <div className="system-critical-actions grid grid-cols-3 gap-2 shrink-0">
+            <SystemButton
+              active={recallBusy}
+              disabled={liveStatus !== "connected" || recallBusy || storeBusy}
+              title={liveStatus !== "connected" ? "Connect ke device dahulu." : "Recall slot terpilih lalu refresh seluruh memory dari device."}
+              onClick={() => void recallMode(selectedModeIndex)}
+            >
+              {recallBusy ? "Recalling…" : "Recall"}
+            </SystemButton>
+            <SystemButton
+              active={storeBusy}
+              disabled={!permanentStoreReady}
+              title={transportMode !== "usb" ? "Save slot permanen terverifikasi melalui USB HID." : `Save preset editor ke slot ${selectedModeIndex}.`}
+              onClick={() => void savePresetToSlot(selectedModeIndex, preset)}
+            >
+              {storeBusy ? "Saving…" : "Save"}
+            </SystemButton>
+            <SystemButton disabled title="Reset all setting belum diaktifkan karena belum ada sniff native yang aman.">Reset all</SystemButton>
+          </div>
         </div>
       </Panel>
 
@@ -972,6 +1101,15 @@ export function SystemPage() {
           <VerticalFader label="MIC TIME" value={s.danceMicTimeSec ?? 6} min={0} max={30} unit="s" onChange={(v) => setPath("system.danceMicTimeSec", v)} height={150} />
         </FaderRow>
       </Panel>
+
+      <MassUploadDialog
+        open={massUploadOpen}
+        items={pc.items}
+        busy={storeBusy}
+        ready={permanentStoreReady}
+        onClose={() => setMassUploadOpen(false)}
+        onUpload={massUploadPcLibrary}
+      />
     </div>
   );
 }

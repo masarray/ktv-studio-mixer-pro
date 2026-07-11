@@ -15,7 +15,8 @@
     "dist:portable": "npm run build && electron-builder --win portable --x64 --publish never",
     "dist:installer": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:windows": "npm run build && electron-builder --win portable nsis --x64 --publish never",
-    "test:desktop-server": "node scripts/test-desktop-server.mjs"
+    "test:desktop-server": "node scripts/test-desktop-server.mjs",
+    "test:native-electron": "electron scripts/verify-electron-native-modules.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -95,7 +96,7 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.16"
   },
-  "version": "0.8.30",
+  "version": "0.8.33",
   "description": "SONKUPIK STUDIO karaoke processor preset editor and live K500 controller",
   "author": "Mas Ari",
   "main": "electron/main.mjs"
