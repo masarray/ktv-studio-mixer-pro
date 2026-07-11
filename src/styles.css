@@ -1298,6 +1298,22 @@ html, body, #app { height: 100%; overflow: hidden; }
   }
 }
 
+/* K500 v0.8.35 — adaptive full-height right inspector.
+   The band inspector owns the remaining PEQ-height instead of leaving the
+   right rail visually hanging above the lower rack. */
+@media (min-width: 1501px) {
+  .studio-workspace-peq .master-context-rail {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
+    overflow: hidden;
+  }
+  .studio-workspace-peq .master-band-inspector {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
 /* K500 v0.8.26 — compact headers + protected System actions. */
 .panel-heading-label {
   max-width: 100%;

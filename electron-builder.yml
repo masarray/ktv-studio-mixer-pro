@@ -4,8 +4,8 @@ copyright: Copyright © 2026 Mas Ari
 asar: true
 # node-hid 3.x and serialport 12.x ship Windows N-API binaries. Rebuilding them
 # with node-gyp is unnecessary and makes a normal end-user build require Python
-# plus the full Visual C++ toolchain. Native compatibility is verified by the
-# build script under the actual Electron runtime before packaging.
+# plus the full Visual C++ toolchain. The build script verifies that the
+# packaged Windows N-API binaries exist without enumerating connected hardware.
 npmRebuild: false
 directories:
   output: release
@@ -16,6 +16,18 @@ files:
   - tools/k500-bridge.mjs
   - build/sonkupik-icon.png
   - package.json
+  # Explicit runtime bridge dependencies. Keeping them here makes the desktop
+  # hardware path auditable even if electron-builder dependency collection
+  # behavior changes in a future release.
+  - node_modules/ws/**/*
+  - node_modules/node-hid/**/*
+  - node_modules/pkg-prebuilds/**/*
+  - node_modules/node-addon-api/**/*
+  - node_modules/serialport/**/*
+  - node_modules/@serialport/**/*
+  - node_modules/node-gyp-build/**/*
+  - node_modules/debug/**/*
+  - node_modules/ms/**/*
 asarUnpack:
   - "**/*.node"
   - "node_modules/node-hid/**/*"
@@ -33,10 +45,10 @@ win:
       arch:
         - x64
 portable:
-  artifactName: sonkupik_karaoke.exe
+  artifactName: SONKUPIK-STUDIO-${version}-Portable.exe
   requestExecutionLevel: user
 nsis:
-  artifactName: sonkupik_karaoke_setup_${version}.exe
+  artifactName: SONKUPIK-STUDIO-${version}-Setup.exe
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

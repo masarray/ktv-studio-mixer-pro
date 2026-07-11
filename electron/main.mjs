@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { startAppServer } from "./local-server.mjs";
+import { startBridge } from "../tools/k500-bridge.mjs";
 
 const APP_ID = "com.masari.sonkupik.karaoke";
 let mainWindow = null;
@@ -31,13 +32,9 @@ async function startNativeBridge() {
   process.env.K500_PRESET_ROOT ||= presetRoot;
   process.env.K500_BRIDGE_PORT ||= "8500";
 
-  try {
-    const bridge = await import(assetPath("tools", "k500-bridge.mjs"));
-    bridgeServer = await bridge.startBridge();
-  } catch (error) {
-    // The UI can still fall back to WebHID/Web Serial. Keep startup usable.
-    console.warn("[desktop] native bridge unavailable", error);
-  }
+  // A normal relative ESM import is ASAR-aware and avoids the invalid raw
+  // Windows path (C:\...) previously passed to dynamic import().
+  bridgeServer = await startBridge({ port: 8500, presetRoot });
 }
 
 async function createMainWindow() {

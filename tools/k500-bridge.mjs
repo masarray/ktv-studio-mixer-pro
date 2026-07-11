@@ -20,11 +20,10 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const PORT = Number(process.env.K500_BRIDGE_PORT || 8500);
 const K500_USB_VENDOR_ID = 0x10c4;
 const K500_USB_PRODUCT_ID = 0x0321;
 const LAST_GOOD_FILE = path.join(tmpdir(), "k500-bridge-last-port.json");
-const PRESET_ROOT = path.resolve(process.env.K500_PRESET_ROOT || process.cwd());
+let PRESET_ROOT = path.resolve(process.env.K500_PRESET_ROOT || process.cwd());
 const PRESET_NAME_OFFSET = 0x0454;
 const PRESET_NAME_LENGTH = 0x21;
 
@@ -238,10 +237,14 @@ async function scanUsb(status) {
 // WebSocket server
 // ---------------------------------------------------------------------------
 
-export async function startBridge() {
+export async function startBridge({
+  host = "127.0.0.1",
+  port = Number(process.env.K500_BRIDGE_PORT || 8500),
+  presetRoot = process.env.K500_PRESET_ROOT || process.cwd(),
+} = {}) {
+  PRESET_ROOT = path.resolve(presetRoot);
   const { WebSocketServer } = await import("ws");
-  const wss = new WebSocketServer({ host: "127.0.0.1", port: PORT, path: "/k500" });
-  console.log(`[k500-bridge] listening on ws://127.0.0.1:${PORT}/k500`);
+  const wss = new WebSocketServer({ host, port, path: "/k500" });
 
   let active = null; // { ws, transport }
 
@@ -329,6 +332,16 @@ export async function startBridge() {
     if (err?.code === "EADDRINUSE") console.log("[k500-bridge] already running — reusing existing instance");
     else console.warn("[k500-bridge] error:", err?.message || err);
   });
+
+  // Do not open the desktop window until the bridge has either started or a
+  // previously-running bridge owns the port. This removes the startup race
+  // with the renderer's short WebSocket discovery timeout.
+  await new Promise((resolve, reject) => {
+    if (wss.address()) { resolve(); return; }
+    wss.once("listening", resolve);
+    wss.once("error", (err) => err?.code === "EADDRINUSE" ? resolve() : reject(err));
+  });
+  if (wss.address()) console.log(`[k500-bridge] listening on ws://${host}:${port}/k500`);
 
   return wss;
 }

@@ -6,7 +6,7 @@ on:
       version:
         description: Release version, for example v0.8.30
         required: true
-        default: v0.8.30
+        default: v0.8.35
   push:
     tags:
       - 'v*'
@@ -52,24 +52,47 @@ jobs:
       - name: Verify artifacts
         shell: powershell
         run: |
-          if (!(Test-Path 'release\sonkupik_karaoke.exe')) { throw 'Portable EXE missing' }
-          $installer = Get-ChildItem 'release\sonkupik_karaoke_setup_*.exe' | Select-Object -First 1
+          $portable = Get-ChildItem 'release\SONKUPIK-STUDIO-*-Portable.exe' | Select-Object -First 1
+          if (!$portable) { throw 'Portable EXE missing' }
+          $installer = Get-ChildItem 'release\SONKUPIK-STUDIO-*-Setup.exe' | Select-Object -First 1
           if (!$installer) { throw 'Installer EXE missing' }
-          Get-ChildItem release\*.exe | Format-Table Name, Length
+          $nativeRoot = 'release\win-unpacked\resources\app.asar.unpacked\node_modules'
+          if (!(Get-ChildItem "$nativeRoot\node-hid" -Recurse -Filter '*.node' -ErrorAction SilentlyContinue)) { throw 'Packaged node-hid binary missing' }
+          if (!(Get-ChildItem "$nativeRoot\@serialport" -Recurse -Filter '*.node' -ErrorAction SilentlyContinue)) { throw 'Packaged serialport binary missing' }
+          @($portable, $installer) | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)" | Add-Content 'release\SHA256SUMS.txt'
+          }
+          Get-ChildItem release\*.exe, release\SHA256SUMS.txt | Format-Table Name, Length
 
-      - name: Upload workflow artifacts
+      - name: Upload portable workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sonkupik-karaoke-${{ env.RELEASE_VERSION }}
+          name: SONKUPIK-STUDIO-${{ env.RELEASE_VERSION }}-Portable
           if-no-files-found: error
-          path: |
-            release/sonkupik_karaoke.exe
-            release/sonkupik_karaoke_setup_*.exe
+          path: release/SONKUPIK-STUDIO-*-Portable.exe
+
+      - name: Upload installer workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONKUPIK-STUDIO-${{ env.RELEASE_VERSION }}-Setup
+          if-no-files-found: error
+          path: release/SONKUPIK-STUDIO-*-Setup.exe
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          name: SONKUPIK STUDIO ${{ env.RELEASE_VERSION }}
+          generate_release_notes: true
+          body: |
+            Choose one Windows package:
+
+            - **Portable** — run directly, no installation required.
+            - **Setup** — installs Start Menu and Desktop shortcuts.
+
+            Both packages contain the same SONKUPIK STUDIO application.
           files: |
-            release/sonkupik_karaoke.exe
-            release/sonkupik_karaoke_setup_*.exe
+            release/SONKUPIK-STUDIO-*-Portable.exe
+            release/SONKUPIK-STUDIO-*-Setup.exe
+            release/SHA256SUMS.txt

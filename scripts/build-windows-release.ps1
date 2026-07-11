@@ -37,12 +37,12 @@ if (-not (Test-Path $ElectronBuilder)) { throw 'electron-builder lokal tidak dit
 & $ElectronBuilder --win portable nsis --x64 --publish never
 if ($LASTEXITCODE -ne 0) { throw 'Packaging Windows gagal.' }
 
-$Portable = Join-Path $RepoRoot 'release\sonkupik_karaoke.exe'
-$Installer = Get-ChildItem (Join-Path $RepoRoot 'release\sonkupik_karaoke_setup_*.exe') -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not (Test-Path $Portable)) { throw 'Portable single EXE tidak ditemukan.' }
+$Portable = Get-ChildItem (Join-Path $RepoRoot 'release\SONKUPIK-STUDIO-*-Portable.exe') -ErrorAction SilentlyContinue | Select-Object -First 1
+$Installer = Get-ChildItem (Join-Path $RepoRoot 'release\SONKUPIK-STUDIO-*-Setup.exe') -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $Portable) { throw 'Portable single EXE tidak ditemukan.' }
 if (-not $Installer) { throw 'Installer EXE tidak ditemukan.' }
 
 Write-Host ''
 Write-Host 'WINDOWS RELEASE SUCCESS' -ForegroundColor Green
-Write-Host $Portable -ForegroundColor Yellow
+Write-Host $Portable.FullName -ForegroundColor Yellow
 Write-Host $Installer.FullName -ForegroundColor Yellow

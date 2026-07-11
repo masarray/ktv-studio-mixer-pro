@@ -11,5 +11,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Output: release\sonkupik_karaoke.exe
+echo Output: release\SONKUPIK-STUDIO-^<version^>-Portable.exe
 pause

@@ -352,7 +352,10 @@ export function EqGraph() {
             }}
           >
             <defs>
-              <linearGradient id="eqCompositeStroke" x1="0" x2="1" y1="0" y2="0">
+              {/* userSpaceOnUse is essential for a perfectly-flat path: its
+                  object bounding box has zero height, which makes the default
+                  objectBoundingBox gradient invalid and hides the 0 dB curve. */}
+              <linearGradient id="eqCompositeStroke" gradientUnits="userSpaceOnUse" x1={PAD.left} x2={W - PAD.right} y1={gainToY(0)} y2={gainToY(0)}>
                 <stop offset="0" stopColor="oklch(0.85 0.14 200)" />
                 <stop offset="0.55" stopColor="oklch(0.82 0.18 78)" />
                 <stop offset="1" stopColor="oklch(0.85 0.14 200)" />

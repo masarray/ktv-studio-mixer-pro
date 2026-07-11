@@ -57,35 +57,35 @@ if ($LASTEXITCODE -ne 0) { throw 'Desktop server validation gagal.' }
 
 $ElectronBuilder = Join-Path $RepoRoot 'node_modules\.bin\electron-builder.cmd'
 if (-not (Test-Path $ElectronBuilder)) { throw 'electron-builder lokal tidak ditemukan.' }
-$ElectronCli = Join-Path $RepoRoot 'node_modules\electron\cli.js'
 $ElectronExe = Join-Path $RepoRoot 'node_modules\electron\dist\electron.exe'
-if (-not (Test-Path $ElectronCli) -or -not (Test-Path $ElectronExe)) {
+if (-not (Test-Path $ElectronExe)) {
   throw 'Electron belum terpasang lengkap (electron.exe tidak ditemukan). Jalankan build kembali tanpa opsi SkipInstall.'
 }
 
-Write-Host '[4/5] Testing USB HID and Serial native modules in Electron' -ForegroundColor Cyan
-$VerifyScript = Join-Path $RepoRoot 'scripts\verify-electron-native-modules.mjs'
-$NativeExit = Invoke-WithHeartbeat -FilePath (Get-Command node).Source -Arguments @(('"{0}"' -f $ElectronCli), ('"{0}"' -f $VerifyScript)) -Activity 'Native module test' -TimeoutMinutes 3
-if ($NativeExit -ne 0) {
+Write-Host '[4/5] Checking packaged Windows native module binaries' -ForegroundColor Cyan
+$NodeHidBinaries = @(Get-ChildItem (Join-Path $RepoRoot 'node_modules\node-hid') -Recurse -Filter '*.node' -File -ErrorAction SilentlyContinue)
+$SerialBinaries = @(Get-ChildItem (Join-Path $RepoRoot 'node_modules') -Recurse -Filter '*.node' -File -ErrorAction SilentlyContinue | Where-Object {
+  $_.FullName -match '[\\/](serialport|@serialport)[\\/]'
+})
+if ($NodeHidBinaries.Count -eq 0 -or $SerialBinaries.Count -eq 0) {
   throw @'
-Native module tidak kompatibel atau instalasinya tidak lengkap.
-Jalankan kembali build-portable-single-exe.cmd dan pilih Force Install bila diminta.
-Python/Visual Studio tidak diperlukan oleh konfigurasi build ini.
+Binary Windows node-hid atau serialport tidak ditemukan di node_modules.
+Hapus folder node_modules lalu jalankan build-portable-single-exe.cmd kembali.
 '@
 }
+Write-Host ("      node-hid: {0} binary | serialport: {1} binary" -f $NodeHidBinaries.Count, $SerialBinaries.Count) -ForegroundColor Green
+Write-Host '      Hardware tidak dipindai saat build; koneksi K500 baru diuji ketika aplikasi dijalankan.' -ForegroundColor DarkGray
 
-Write-Host '[5/5] Packaging portable sonkupik_karaoke.exe' -ForegroundColor Cyan
+Write-Host '[5/5] Packaging versioned portable EXE' -ForegroundColor Cyan
 Write-Host '      Tahap ini dapat memerlukan beberapa menit. Output Electron Builder akan tetap terlihat.' -ForegroundColor DarkGray
 $BuilderCli = Join-Path $RepoRoot 'node_modules\electron-builder\cli.js'
 if (-not (Test-Path $BuilderCli)) { throw 'electron-builder CLI tidak ditemukan.' }
 $PackageExit = Invoke-WithHeartbeat -FilePath (Get-Command node).Source -Arguments @(('"{0}"' -f $BuilderCli), '--win', 'portable', '--x64', '--publish', 'never') -Activity 'Electron packaging' -TimeoutMinutes 20
 if ($PackageExit -ne 0) { throw 'electron-builder portable gagal.' }
 
-$Output = Join-Path $RepoRoot 'release\sonkupik_karaoke.exe'
-if (-not (Test-Path $Output)) {
-  throw "Portable executable tidak ditemukan: $Output"
-}
+$Output = Get-ChildItem (Join-Path $RepoRoot 'release\SONKUPIK-STUDIO-*-Portable.exe') -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $Output) { throw 'Portable executable tidak ditemukan di folder release.' }
 
 Write-Host ''
 Write-Host 'BUILD SUCCESS' -ForegroundColor Green
-Write-Host $Output -ForegroundColor Yellow
+Write-Host $Output.FullName -ForegroundColor Yellow

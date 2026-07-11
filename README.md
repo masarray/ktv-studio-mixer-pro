@@ -29,7 +29,7 @@ build-portable-single-exe.cmd
 Output:
 
 ```text
-release\sonkupik_karaoke.exe
+release\SONKUPIK-STUDIO-<version>-Portable.exe
 ```
 
 The portable EXE contains its own Chromium and Node runtime. The target PC does not need Node.js installed.
@@ -51,8 +51,8 @@ npm run dist:windows
 Outputs:
 
 ```text
-release\sonkupik_karaoke.exe
-release\sonkupik_karaoke_setup_<version>.exe
+release\SONKUPIK-STUDIO-<version>-Portable.exe
+release\SONKUPIK-STUDIO-<version>-Setup.exe
 ```
 
 ## Automated release
