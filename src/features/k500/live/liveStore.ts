@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { EqBand, EqCrossover, Preset } from "@/features/k500/types";
-import { DEVICE_ROUTE_BT, DEVICE_ROUTE_USB, DEVICE_SLOT_IMAGE_LENGTH, DEVICE_SLOT_WRITE_CHUNK, EQ_SECTION_ID, buildCrossoverWrite, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildRecallHandshake, buildRecallMode, buildStoreBegin, buildStoreChunk, buildStoreCommit, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock, buildUseInitVolume, supportsCrossoverWrite, type DeviceStoreChain } from "@/features/k500/protocol/commands";
+import { DEVICE_ROUTE_BT, DEVICE_ROUTE_USB, DEVICE_SLOT_IMAGE_LENGTH, DEVICE_SLOT_WRITE_CHUNK, EQ_SECTION_ID, buildCrossoverWrite, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildPlayerCommand, buildOutputBlock, buildReadBlock, buildRecallHandshake, buildRecallMode, buildStoreBegin, buildStoreChunk, buildStoreCommit, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock, buildUseInitVolume, supportsCrossoverWrite, type DeviceStoreChain, type PlayerCommand } from "@/features/k500/protocol/commands";
 import { buildDeviceSlotImage } from "@/features/k500/live/liveMemory";
 import { frameLabel, hex } from "@/features/k500/protocol/frame";
 
@@ -40,6 +40,7 @@ interface K500LiveState {
   sendHeartbeat: () => Promise<void>;
   sendHandshake: () => Promise<void>;
   toggleMute: () => Promise<void>;
+  sendPlayerCommand: (command: PlayerCommand) => Promise<void>;
   sendEqBand: (eqKey: string, bandIndexZeroBased: number, band: Pick<EqBand, "type" | "frequencyHz" | "q" | "gainDb">) => Promise<void>;
   sendPathUpdate: (path: string, preset: Preset) => Promise<void>;
   clearLog: () => void;
@@ -433,13 +434,15 @@ function outputPathToSection(path: string): "main" | "surround" | "center" | "su
 type CrossoverLiveWrite = { eqKey: string; kind: "hpf" | "lpf"; hz: number; crossover?: EqCrossover };
 
 function crossoverPathToWrites(path: string, preset: Preset): CrossoverLiveWrite[] | null {
-  const eqMatch = /^eq\.([^.]+)\.crossover\.(hpfHz|lpfHz)$/.exec(path);
+  const eqMatch = /^eq\.([^.]+)\.crossover\.(hpfHz|lpfHz|hpType|lpType)$/.exec(path);
   if (eqMatch) {
     const eqKey = eqMatch[1];
-    const field = eqMatch[2] as "hpfHz" | "lpfHz";
+    const field = eqMatch[2] as "hpfHz" | "lpfHz" | "hpType" | "lpType";
     const section = preset.eq[eqKey];
     if (!section) return null;
-    return [{ eqKey, kind: field === "hpfHz" ? "hpf" : "lpf", hz: section.crossover[field], crossover: section.crossover }];
+    const kind = field === "hpfHz" || field === "hpType" ? "hpf" : "lpf";
+    const hz = kind === "hpf" ? section.crossover.hpfHz : section.crossover.lpfHz;
+    return [{ eqKey, kind, hz, crossover: section.crossover }];
   }
 
   if (path === "mic.hpfHz" || path === "mic.lpfHz") {
@@ -1130,6 +1133,16 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
     await enqueueWrite(buildMute(next), next ? "Mute ON" : "Mute OFF", set, get);
   },
 
+  sendPlayerCommand: async (command) => {
+    if (get().status !== "connected") {
+      const message = "Device belum connected; player command tidak dikirim.";
+      set({ lastError: message });
+      appendLog(set, get, { dir: "ERR", label: `Player ${command} blocked`, data: message });
+      return;
+    }
+    await enqueueWrite(buildPlayerCommand(command), `Player ${command}`, set, get);
+  },
+
   sendEqBand: async (eqKey, bandIndexZeroBased, band) => {
     if (!isLiveWriteAllowed(set, get, `EQ ${eqKey} B${bandIndexZeroBased + 1}`)) return;
     if (EQ_SECTION_ID[eqKey] === undefined) {
@@ -1160,7 +1173,15 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
           }
           queueLiveBlockWrite(
             `xover:${write.eqKey}:${write.kind}`,
-            buildCrossoverWrite(write.eqKey, write.kind, write.hz, write.crossover, preset.system.deviceModeIndex),
+            buildCrossoverWrite(
+              write.eqKey,
+              write.kind,
+              write.hz,
+              write.crossover,
+              // Native captures prove this Music byte is live device state,
+              // not the selected Equipment Mode. Mirror readback scalar 0x1B.
+              deviceScalarCache?.[0x1b] ?? 0x32,
+            ),
             `Crossover ${write.eqKey} ${write.kind.toUpperCase()} · ${Math.round(write.hz)}Hz`,
             set,
             get,

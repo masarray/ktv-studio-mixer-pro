@@ -1,0 +1,42 @@
+appId: com.masari.sonkupik.karaoke
+productName: SONKUPIK STUDIO
+copyright: Copyright © 2026 Mas Ari
+asar: true
+npmRebuild: true
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - electron/**/*
+  - tools/k500-bridge.mjs
+  - build/sonkupik-icon.png
+  - package.json
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/node-hid/**/*"
+  - "node_modules/hidraw/**/*"
+  - "node_modules/serialport/**/*"
+  - "node_modules/@serialport/**/*"
+win:
+  icon: build/sonkupik.ico
+  executableName: sonkupik_karaoke
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+portable:
+  artifactName: sonkupik_karaoke.exe
+  requestExecutionLevel: user
+nsis:
+  artifactName: sonkupik_karaoke_setup_${version}.exe
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: SONKUPIK STUDIO
+  uninstallDisplayName: SONKUPIK STUDIO

@@ -7,6 +7,7 @@ import {
 } from "./parser";
 import type { Preset, PageKey, EqSection } from "./types";
 import { clampFilterPathValue } from "./filterRanges";
+import { crossoverFilterRaw } from "./filterTypes";
 import { useK500Live } from "./live/liveStore";
 import sampleUrl from "@/assets/sample.k500?url";
 import { buildPresetFromLiveMemory } from "./live/liveMemory";
@@ -54,6 +55,29 @@ function setPathOn(obj: any, path: string, value: any) {
 }
 
 function setFilterPathWithAliases(preset: Preset, path: string, value: any) {
+  const typeMatch = /^eq\.([^.]+)\.crossover\.(hpType|lpType)$/.exec(path);
+  if (typeMatch) {
+    const eqKey = typeMatch[1];
+    const field = typeMatch[2] as "hpType" | "lpType";
+    const kind = field === "hpType" ? "hpf" : "lpf";
+    const rawField = field === "hpType" ? "hpTypeRaw" : "lpTypeRaw";
+    const section = preset.eq[eqKey];
+    if (!section?.crossover) return;
+
+    section.crossover[field] = String(value);
+    section.crossover[rawField] = crossoverFilterRaw(kind, value, section.crossover[rawField]);
+
+    // The native Mic filter is shared. Keep both PEQ views visually and
+    // serially consistent when its type changes from either Mic A or Mic B.
+    if (eqKey === "micA" || eqKey === "micB") {
+      for (const key of ["micA", "micB"] as const) {
+        preset.eq[key].crossover[field] = String(value);
+        preset.eq[key].crossover[rawField] = crossoverFilterRaw(kind, value, preset.eq[key].crossover[rawField]);
+      }
+    }
+    return;
+  }
+
   const safeValue = clampFilterPathValue(path, value);
   setPathOn(preset, path, safeValue);
 

@@ -2,16 +2,17 @@ import { useEffect, useRef } from "react";
 import { useStudio } from "@/features/k500/store";
 import type { PageKey } from "@/features/k500/types";
 import { cn } from "@/lib/utils";
-import sampleUrl from "@/assets/sample.k500?url";
+import sonkupikLogo from "@/assets/sonkupik-logo.png";
 import {
   Mic2, Music2, Speaker, Waves, RadioTower, Activity, Sparkles, Repeat, Settings2,
-  Upload, Download, PlayCircle, CircleDot, FileMusic,
+  Upload, Download, SkipBack, SkipForward, Play, VolumeX,
 } from "lucide-react";
-import { Led, LedReadout } from "./primitives";
+import { LedReadout } from "./primitives";
 import { MasterSection } from "./MasterSection";
 import { EqGraph } from "./EqGraph";
 import { MicPage, MusicPage, OutputPage, ReverbPage, EchoPage, SystemPage } from "./pages";
 import { LiveDevicePill } from "./LiveDevicePanel";
+import { useK500Live } from "@/features/k500/live/liveStore";
 
 const NAV: { key: PageKey; label: string; desc: string; Icon: any }[] = [
   { key: "music", label: "Music", desc: "Source & tone", Icon: Music2 },
@@ -25,21 +26,45 @@ const NAV: { key: PageKey; label: string; desc: string; Icon: any }[] = [
   { key: "system", label: "System", desc: "Global setup", Icon: Settings2 },
 ];
 
+function PlayerTransportControls() {
+  const status = useK500Live((s) => s.status);
+  const sendPlayerCommand = useK500Live((s) => s.sendPlayerCommand);
+  const toggleMute = useK500Live((s) => s.toggleMute);
+  const mute = useK500Live((s) => s.mute);
+  const connected = status === "connected";
+
+  const buttonClass = "transport-icon-btn chrome-btn grid place-items-center";
+  return (
+    <div className="player-transport-cluster panel-inset flex items-center gap-1 p-1 shrink-0" aria-label="Player transport">
+      <button type="button" className={buttonClass} disabled={!connected} onClick={() => void sendPlayerCommand("rewind")} title="Previous / rewind">
+        <SkipBack size={14} fill="currentColor" />
+      </button>
+      <button type="button" className={cn(buttonClass, "transport-play-btn")} disabled={!connected} onClick={() => void sendPlayerCommand("playPause")} title="Play / pause">
+        <Play size={15} fill="currentColor" />
+      </button>
+      <button type="button" className={buttonClass} disabled={!connected} onClick={() => void sendPlayerCommand("forward")} title="Next / forward">
+        <SkipForward size={14} fill="currentColor" />
+      </button>
+      <span className="player-transport-divider" />
+      <button type="button" className={cn(buttonClass, mute && "chrome-btn-active player-mute-active")} disabled={!connected} onClick={() => void toggleMute()} title={mute ? "Unmute" : "Mute"}>
+        <VolumeX size={14} />
+      </button>
+    </div>
+  );
+}
+
 function TransportBar() {
   const preset = useStudio((s) => s.preset);
   const importBuffer = useStudio((s) => s.importBuffer);
-  const importDefaultFlat = useStudio((s) => s.importDefaultFlat);
   const exportPreset = useStudio((s) => s.exportPreset);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const resetFlat = async () => { await importDefaultFlat(); };
-
   return (
     <header className="panel-bevel px-4 py-2.5 flex items-center gap-4 h-[52px] shrink-0">
-      <div className="flex items-center gap-3 shrink-0 w-[280px]">
-        <div className="brushed-metal w-9 h-9 grid place-items-center rounded-md border border-[color:var(--bevel-hi)]"
+      <div className="flex items-center gap-3 shrink-0 w-[300px]">
+        <div className="brushed-metal w-10 h-10 grid place-items-center rounded-md border border-[color:var(--bevel-hi)] overflow-hidden bg-[oklch(1_0_0/0.04)]"
           style={{ boxShadow: "inset 0 1px 0 oklch(1 0 0 / 18%), 0 2px 6px oklch(0 0 0 / 60%)" }}>
-          <FileMusic size={18} className="text-[color:var(--gold)]" />
+          <img src={sonkupikLogo} alt="Sonkupik" className="w-8 h-8 object-contain" />
         </div>
         <div>
           <h1 className="font-display text-sm font-bold leading-none tracking-tight">
@@ -49,16 +74,9 @@ function TransportBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mx-auto">
-        <div className="flex items-center gap-1.5">
-          <Led color="green" on={!!preset} />
-          <Led color="amber" on={!!preset?.checksumOk} />
-          <Led color="cyan" on={!!preset} />
-        </div>
-        <LedReadout value={preset ? preset.name : "— NO PRESET —"} size="md" color="amber" className="max-w-[240px] truncate" />
-        <span className="hidden xl:inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground ml-1">
-          <CircleDot size={12} /> {preset?.checksumOk ? "CHECKSUM OK" : preset ? "CHECKSUM DIRTY" : "OFFLINE"}
-        </span>
+      <div className="flex items-center gap-2 mx-auto min-w-0">
+        <PlayerTransportControls />
+        <LedReadout value={preset ? preset.name : "— NO PRESET —"} size="md" color="amber" className="max-w-[260px] truncate" />
         <LiveDevicePill />
       </div>
 
@@ -73,9 +91,6 @@ function TransportBar() {
             e.target.value = "";
           }}
         />
-        <button onClick={resetFlat} className="chrome-btn px-3 py-1.5 text-xs font-display flex items-center gap-1.5">
-          <PlayCircle size={14} /> Flat
-        </button>
         <button onClick={() => fileRef.current?.click()} className="chrome-btn px-3 py-1.5 text-xs font-display flex items-center gap-1.5">
           <Upload size={14} /> Import
         </button>

@@ -1,6 +1,7 @@
 import type { EqBand, EqCrossover, Preset } from "@/features/k500/types";
 import { buildFrame, byte } from "./frame";
 import { clampFilterHz } from "@/features/k500/filterRanges";
+import { crossoverFilterCode } from "@/features/k500/filterTypes";
 
 export const EQ_SECTION_ID: Record<string, number> = Object.freeze({
   micA: 0x00,
@@ -148,6 +149,29 @@ export function buildMute(mute: boolean): Uint8Array {
   return buildFrame([0x03, 0x15, mute ? 0x01 : 0x00, 0x00]);
 }
 
+export type PlayerCommand = "rewind" | "forward" | "playPause";
+
+const PLAYER_ACTION: Readonly<Record<PlayerCommand, number>> = Object.freeze({
+  rewind: 0x00,
+  forward: 0x01,
+  playPause: 0x02,
+});
+
+/**
+ * Native media transport command (CMD 0x06). USB captures supplied
+ * 11.07.2026 prove the same fixed tail byte 0x05 for all three actions:
+ *
+ *   Rewind    AA 03 00 06 00 05 F2
+ *   Forward   AA 03 00 06 01 05 F1
+ *   Play/Pause AA 03 00 06 02 05 F0
+ *
+ * Play and Pause deliberately use the same toggle command; clicking twice in
+ * the native app emits the exact same frame twice.
+ */
+export function buildPlayerCommand(command: PlayerCommand): Uint8Array {
+  return buildFrame([0x03, 0x06, PLAYER_ACTION[command], 0x05]);
+}
+
 export function buildReadBlock(offset: number, length: number): Uint8Array {
   const [ol, oh] = u16le(offset);
   const [ll, lh] = u16le(length);
@@ -219,25 +243,14 @@ export const CROSSOVER_SELECTOR: Readonly<Record<string, CrossoverCommandSpec>> 
   sub: Object.freeze({ hpf: 0x0e, lpf: 0x0f }),
 });
 
-const FILTER_TYPE_CODE_BY_LABEL: Readonly<Record<string, number>> = Object.freeze({
-  "LP Bessel 12": 0x01,
-  "HP Bessel 12": 0x01,
-  "LP Butter 12": 0x02,
-  "HP Butter 12": 0x02,
-  "LP Butter 24": 0x06,
-  "HP Butter 24": 0x06,
-  "LP LR 24": 0x07,
-  "HP LR 24": 0x07,
-});
-
 // Native-app USB sniffs supplied 06/07.07.2026 prove HPF/LPF frequency is
 // NOT a top/music/output block write. It is a compact CMD 0x11 write.
 //
 // BT frame body is 6 bytes:
-//   AA 06 11 [section+kind selector] [filter type] [freq u16 LE] [slot] CS
+//   AA 06 11 [section+kind selector] [filter type] [freq u16 LE] [state] CS
 //
 // USB HID is produced from that BT frame by toUsbFrame():
-//   AA 06 00 11 [section+kind selector] [filter type] [freq u16 LE] [slot] CS
+//   AA 06 00 11 [section+kind selector] [filter type] [freq u16 LE] [state] CS
 //
 // Critical bug fixed in v0.8.22: the previous implementation returned
 // buildFrame([0x11, ...]) without the BT length byte. On USB this was
@@ -250,24 +263,24 @@ const FILTER_TYPE_CODE_BY_LABEL: Readonly<Record<string, number>> = Object.freez
 // frame is `... 05 02 ...`, Surround is `... 09 01 ...`, and Sub is
 // `... 0F 06 ...`.
 //
-// The final payload byte is section-specific. Music captures track the active
-// Equipment Mode / preset slot (0x04 and 0x09 were observed). Every verified
-// Main/Surround/Center/Sub LPF capture uses 0x00, so output/FX/Mic writes must
-// keep this byte zero instead of leaking the Music slot into another section.
-function crossoverTailByte(eqKey: string, modeIndex?: number): number {
+// The final payload byte is section-specific. It is NOT the Equipment Mode
+// index: native Music captures show 0x04, 0x09 and 0x32 in different device
+// states, while every verified Main/Surround/Center/Sub LPF capture uses 0x00.
+// The live layer therefore mirrors the current Music state byte read from the
+// device instead of inventing it from the selected preset slot. 0x32 is only
+// the disconnected/no-readback fallback because that is the value present in
+// the latest native type-change captures supplied on 11.07.2026.
+function crossoverTailByte(eqKey: string, musicStateByte?: number): number {
   if (eqKey !== "music") return 0x00;
-  const n = Number(modeIndex);
-  return byte(clamp(Number.isFinite(n) ? n : 4, 0, 10));
+  const n = Number(musicStateByte);
+  return byte(Number.isFinite(n) ? n : 0x32);
 }
 
 function crossoverTypeByte(crossover: EqCrossover | undefined, kind: CrossoverLiveKind): number {
   if (!crossover) return 0x02;
   const label = kind === "hpf" ? crossover.hpType : crossover.lpType;
-  const fromLabel = FILTER_TYPE_CODE_BY_LABEL[String(label)];
-  if (fromLabel !== undefined) return fromLabel;
   const raw = kind === "hpf" ? crossover.hpTypeRaw : crossover.lpTypeRaw;
-  const lowByte = Number(raw) & 0xff;
-  return lowByte || 0x02;
+  return crossoverFilterCode(label, raw, 0x02);
 }
 
 export function supportsCrossoverWrite(eqKey: string): boolean {
@@ -279,7 +292,7 @@ export function buildCrossoverWrite(
   kind: CrossoverLiveKind,
   hz: number,
   crossover?: EqCrossover,
-  modeIndex?: number,
+  musicStateByte?: number,
 ): Uint8Array {
   const spec = CROSSOVER_SELECTOR[eqKey];
   if (!spec) throw new Error(`Unsupported crossover live section: ${eqKey}`);
@@ -287,7 +300,7 @@ export function buildCrossoverWrite(
   const typeCode = crossoverTypeByte(crossover, kind);
   const safeHz = clampFilterHz(eqKey, kind, hz);
   const [fl, fh] = u16le(safeHz);
-  return buildFrame([0x06, 0x11, selector, typeCode, fl, fh, crossoverTailByte(eqKey, modeIndex)]);
+  return buildFrame([0x06, 0x11, selector, typeCode, fl, fh, crossoverTailByte(eqKey, musicStateByte)]);
 }
 
 

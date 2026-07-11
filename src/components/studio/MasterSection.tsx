@@ -1,4 +1,4 @@
-import { useStudio, changedByteCount, EQ_SECTIONS } from "@/features/k500/store";
+import { useStudio, changedByteCount } from "@/features/k500/store";
 import { Panel, VerticalFader, LedReadout, Led, SelectField, NumberField } from "./primitives";
 
 export function MasterSection() {
@@ -11,9 +11,7 @@ export function MasterSection() {
   const setPath = useStudio((s) => s.setPath);
   const setBandValue = useStudio((s) => s.setBandValue);
   const setName = useStudio((s) => s.setName);
-  const copyMicAtoB = useStudio((s) => s.copyMicAtoB);
   const resetSelectedBand = useStudio((s) => s.resetSelectedBand);
-  const exportPreset = useStudio((s) => s.exportPreset);
 
   if (!preset) {
     return (
@@ -29,12 +27,7 @@ export function MasterSection() {
   const band = section?.bands?.[selectedBand];
   const diff = dirty ? changedByteCount(preset, original) : 0;
 
-  const warnings: string[] = [];
-  Object.values(preset.eq).forEach((eq) =>
-    eq.bands.forEach((b) => {
-      if (Math.abs(b.gainDb) >= 14) warnings.push(`${eq.label} B${b.index} ${b.gainDb > 0 ? "+" : ""}${b.gainDb.toFixed(1)} dB`);
-    }),
-  );
+
 
   return (
     <aside className="master-rail grid gap-3 shrink-0 relative min-h-0 overflow-hidden">
@@ -86,19 +79,7 @@ export function MasterSection() {
           </Panel>
         )}
 
-        <Panel eyebrow="Sonic Guard" className="master-sonic-guard"
-          title={warnings.length ? `${warnings.length} high-gain bands` : "Safe response"}
-          right={<Led color={warnings.length ? "red" : "green"} />}
-        >
-          {warnings.length ? (
-            <div className="flex flex-col gap-1 text-[11px] font-mono text-[color:var(--meter-red)]">
-              {warnings.slice(0, 3).map((w, i) => <span key={i}>{w}</span>)}
-            </div>
-          ) : (
-            <p className="text-[11px] font-mono text-muted-foreground">No extreme EQ gain detected.</p>
-          )}
-        </Panel>
-        <span className="hidden">{Object.keys(EQ_SECTIONS).length}</span>
+
       </div>
 
       <Panel eyebrow="Master Section" title="Master Strip" className="master-bottom-strip h-full"

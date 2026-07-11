@@ -1541,3 +1541,185 @@ html, body, #app { height: 100%; overflow: hidden; }
   .studio-workspace-peq .master-rail { width: 164px; }
   .studio-workspace-peq .rack-row { padding-right: 176px; }
 }
+
+/* K500 v0.8.28 — unified lower-rack geometry, native player transport,
+   compact linked-Mic control, and no-clipping master strip. */
+:root {
+  --k500-panel-header-height: 35px;
+  --k500-master-lower-width: 188px;
+}
+
+/* One visual language across every mixer card in the lower rack and System. */
+.rack-row .panel-bevel > header,
+.system-page .panel-bevel > header,
+.music-filter-panel > header,
+.master-bottom-strip > header {
+  box-sizing: border-box;
+  min-height: var(--k500-panel-header-height) !important;
+  height: var(--k500-panel-header-height) !important;
+  padding: 7px 12px !important;
+  align-items: center !important;
+}
+
+/* Native-player controls replace the decorative three-dot LEDs. */
+.player-transport-cluster {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid oklch(1 0 0 / 7%);
+  background:
+    linear-gradient(180deg, oklch(0.13 0.014 250 / 92%), oklch(0.055 0.01 250 / 96%)),
+    repeating-linear-gradient(90deg, oklch(1 0 0 / 2.5%) 0 1px, transparent 1px 4px);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 6%), inset 0 -1px 2px oklch(0 0 0 / 58%);
+}
+.transport-icon-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 25px;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  color: oklch(0.82 0.035 220);
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 15%),
+    inset 0 -1px 0 oklch(0 0 0 / 58%),
+    0 2px 4px oklch(0 0 0 / 55%);
+  transition: color 90ms ease, transform 70ms ease, box-shadow 70ms ease, filter 90ms ease;
+}
+.transport-icon-btn svg {
+  opacity: .94;
+  filter: drop-shadow(0 0 3px oklch(0.82 0.13 205 / 34%));
+  transition: transform 70ms ease, filter 90ms ease, opacity 90ms ease;
+}
+.transport-icon-btn:hover:not(:disabled) {
+  color: oklch(0.9 0.16 198);
+  filter: brightness(1.12);
+}
+.transport-icon-btn:hover:not(:disabled) svg {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px oklch(0.88 0.17 198 / 64%));
+}
+.transport-icon-btn:active:not(:disabled) {
+  transform: translateY(2px) scale(.955);
+  box-shadow:
+    inset 0 2px 5px oklch(0 0 0 / 78%),
+    inset 0 -1px 0 oklch(1 0 0 / 5%),
+    0 0 0 oklch(0 0 0 / 0%);
+  filter: brightness(1.18);
+}
+.transport-icon-btn:active:not(:disabled) svg {
+  transform: translateY(1px) scale(.92);
+  opacity: 1;
+  filter: drop-shadow(0 0 6px oklch(0.9 0.18 198 / 82%));
+}
+.transport-play-btn {
+  color: oklch(0.88 0.14 198);
+}
+.transport-icon-btn.chrome-btn-active { color: var(--cyan); }
+.transport-icon-btn.player-mute-active { color: var(--meter-red); }
+.player-transport-divider {
+  width: 1px;
+  height: 17px;
+  margin-inline: 2px;
+  background: linear-gradient(180deg, transparent, oklch(1 0 0 / 16%), transparent);
+}
+
+/* Mic A / Mic B + link are one compact editing cluster, like the native app. */
+.mic-eq-link-control {
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid oklch(1 0 0 / 8%);
+  background: linear-gradient(180deg, oklch(1 0 0 / 4%), oklch(0 0 0 / 14%));
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .14s ease, color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.mic-eq-link-control input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mic-eq-link-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: oklch(0.28 0.01 250);
+  box-shadow: inset 0 1px 1px oklch(0 0 0 / 55%);
+}
+.mic-eq-link-control.active {
+  color: var(--cyan);
+  border-color: oklch(0.85 0.14 200 / 42%);
+  background: linear-gradient(180deg, oklch(0.85 0.14 200 / 11%), oklch(0 0 0 / 15%));
+  box-shadow: 0 0 14px oklch(0.85 0.14 200 / 11%);
+}
+.mic-eq-link-control.active .mic-eq-link-led {
+  background: var(--cyan);
+  box-shadow: 0 0 8px oklch(0.85 0.14 200 / 75%);
+}
+
+/* Crossover type selectors remain compact even in narrow numeric panels. */
+.crossover-control-stack { align-content: start; }
+.crossover-control-stack label,
+.crossover-control-grid label { min-width: 0; }
+.crossover-control-stack .studio-select,
+.crossover-control-grid .studio-select { height: 29px; font-size: 10px; padding-inline: 6px; }
+
+/* Master is a lower-rack utility strip, never a clipped fourth column. */
+.master-bottom-strip > div:last-child { overflow: hidden !important; padding-inline: 5px !important; }
+.master-bottom-strip > div:last-child > div {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-evenly !important;
+  gap: 2px !important;
+}
+.master-bottom-strip .fader-strip {
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  padding-inline: 1px !important;
+}
+.master-bottom-strip .fader-track-shell { width: 36px !important; }
+.master-bottom-strip .fader-readout,
+.master-bottom-strip .readout {
+  width: 43px !important;
+  min-width: 43px !important;
+  max-width: 43px !important;
+  padding-inline: 3px !important;
+}
+
+@media (max-width: 1500px) {
+  .studio-workspace-peq .master-rail {
+    width: var(--k500-master-lower-width) !important;
+    max-width: var(--k500-master-lower-width) !important;
+  }
+  .studio-workspace-peq .rack-row {
+    padding-right: calc(var(--k500-master-lower-width) + 12px) !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  :root { --k500-master-lower-width: 180px; }
+  .studio-workspace-peq .master-rail {
+    width: var(--k500-master-lower-width) !important;
+    max-width: var(--k500-master-lower-width) !important;
+  }
+  .studio-workspace-peq .rack-row {
+    padding-right: calc(var(--k500-master-lower-width) + 10px) !important;
+  }
+}
+
+/* Keep navigation compact at every desktop breakpoint; PEQ owns the width. */
+.rack-nav {
+  width: 170px !important;
+  min-width: 170px !important;
+  max-width: 170px !important;
+}

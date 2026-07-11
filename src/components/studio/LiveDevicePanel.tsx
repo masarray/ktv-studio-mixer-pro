@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Bluetooth, Cable, Power, Radio, Trash2, Usb, VolumeX } from "lucide-react";
+import { Bluetooth, Cable, Power, Radio, Trash2, Usb } from "lucide-react";
 import { useK500Live } from "@/features/k500/live/liveStore";
 import { cn } from "@/lib/utils";
 import { Led, LedReadout, Panel } from "./primitives";
@@ -10,8 +10,6 @@ export function LiveDevicePill() {
   const connect = useK500Live((s) => s.connect);
   const disconnect = useK500Live((s) => s.disconnect);
   const setLiveEnabled = useK500Live((s) => s.setLiveEnabled);
-  const toggleMute = useK500Live((s) => s.toggleMute);
-  const mute = useK500Live((s) => s.mute);
   const lastError = useK500Live((s) => s.lastError);
   const transportMode = useK500Live((s) => s.transportMode);
   const setTransportMode = useK500Live((s) => s.setTransportMode);
@@ -28,7 +26,7 @@ export function LiveDevicePill() {
   const liveLedColor = error ? "red" : liveEnabled && connected ? "green" : "amber";
 
   return (
-    <div className={cn("panel-inset h-[34px] px-2 flex items-center gap-2 min-w-[470px]", connected && "ring-1 ring-[color:var(--cyan)]/25")}
+    <div className={cn("panel-inset h-[34px] px-2 flex items-center gap-2 min-w-[365px]", connected && "ring-1 ring-[color:var(--cyan)]/25")}
       title={unsupported ? "Web Serial/WebHID tidak tersedia. Pakai Chrome/Edge di localhost." : lastError || "K500 Smart Connect · scans remembered BT + USB first"}
     >
       <button
@@ -79,10 +77,6 @@ export function LiveDevicePill() {
       >
         {connected ? <Power size={12} /> : busy ? <Radio size={12} className="animate-pulse" /> : <Cable size={12} />}
         {busy ? "Scanning" : connected ? "Disconnect" : "Connect"}
-      </button>
-
-      <button disabled={!connected} onClick={toggleMute} className={cn("chrome-btn px-2 py-1 text-[10px] font-display inline-flex items-center gap-1", mute && "chrome-btn-active")}> 
-        <VolumeX size={12} /> {mute ? "Muted" : "Mute"}
       </button>
 
       <LedReadout

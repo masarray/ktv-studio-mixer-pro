@@ -3,6 +3,7 @@ import { useStudio } from "@/features/k500/store";
 import { EQ_SECTIONS } from "@/features/k500/parser";
 import type { EqBand, EqCrossover } from "@/features/k500/types";
 import { filterRangeForEqKey } from "@/features/k500/filterRanges";
+import { describeCrossoverFilter } from "@/features/k500/filterTypes";
 import { cn } from "@/lib/utils";
 
 const MIN_FREQ = 20;
@@ -101,24 +102,64 @@ function bandResponseDbAt(band: EqBand, freq: number) {
     : peakingCoeffs(band.frequencyHz, band.q, band.gainDb);
   return biquadMagDb(coeff, freq);
 }
-function crossoverOrder(typeLabel: string) {
-  return String(typeLabel || "").toLowerCase().includes("24") ? 4 : 2;
+const BESSEL_COEFFICIENTS: Readonly<Record<2 | 3 | 4, readonly number[]>> = Object.freeze({
+  2: Object.freeze([3, 3, 1]),
+  3: Object.freeze([15, 15, 6, 1]),
+  4: Object.freeze([105, 105, 45, 10, 1]),
+});
+
+// Scales reverse-Bessel polynomials so the selected cutoff remains the
+// conventional -3 dB point. This makes Bessel/Butter/LR choices visibly and
+// technically distinct without changing the cutoff handle position.
+const BESSEL_3DB_SCALE: Readonly<Record<2 | 3 | 4, number>> = Object.freeze({
+  2: 1.3616541287161308,
+  3: 1.7556723686812106,
+  4: 2.113917674904216,
+});
+
+function besselLowpassMagnitude(order: 2 | 3 | 4, normalizedFrequency: number): number {
+  const x = Math.max(0, normalizedFrequency) * BESSEL_3DB_SCALE[order];
+  const coefficients = BESSEL_COEFFICIENTS[order];
+  let re = 0;
+  let im = 0;
+  for (let power = 0; power < coefficients.length; power++) {
+    const magnitude = coefficients[power] * Math.pow(x, power);
+    const phase = power * Math.PI / 2;
+    re += magnitude * Math.cos(phase);
+    im += magnitude * Math.sin(phase);
+  }
+  return coefficients[0] / Math.max(1e-12, Math.hypot(re, im));
 }
+
+function crossoverFilterDb(kind: "hpf" | "lpf", typeLabel: string, typeRaw: number, cutoff: number, freq: number): number {
+  const spec = describeCrossoverFilter(kind, typeLabel, typeRaw);
+  const ratio = kind === "lpf"
+    ? Math.max(freq, 1) / Math.max(cutoff, 1)
+    : Math.max(cutoff, 1) / Math.max(freq, 1);
+
+  let magnitude: number;
+  if (spec.family === "bessel") {
+    magnitude = besselLowpassMagnitude(spec.order, ratio);
+  } else if (spec.family === "lr") {
+    // LR24 = two cascaded Butterworth 12 dB sections; -6 dB at crossover.
+    const butter12 = 1 / Math.sqrt(1 + Math.pow(ratio, 4));
+    magnitude = butter12 * butter12;
+  } else {
+    magnitude = 1 / Math.sqrt(1 + Math.pow(ratio, 2 * spec.order));
+  }
+  return 20 * Math.log10(Math.max(magnitude, 1e-12));
+}
+
 function crossoverResponseDbAt(crossover: EqCrossover | undefined, freq: number) {
   if (!crossover) return 0;
   let db = 0;
   const hp = Number(crossover.hpfHz) || MIN_FREQ;
   const lp = Number(crossover.lpfHz) || MAX_FREQ;
-  if (hp > MIN_FREQ) {
-    const n = crossoverOrder(crossover.hpType);
-    db += -10 * Math.log10(1 + Math.pow(hp / Math.max(freq, 1), 2 * n));
-  }
-  if (lp < MAX_FREQ) {
-    const n = crossoverOrder(crossover.lpType);
-    db += -10 * Math.log10(1 + Math.pow(freq / Math.max(lp, 1), 2 * n));
-  }
+  if (hp > MIN_FREQ) db += crossoverFilterDb("hpf", crossover.hpType, crossover.hpTypeRaw, hp, freq);
+  if (lp < MAX_FREQ) db += crossoverFilterDb("lpf", crossover.lpType, crossover.lpTypeRaw, lp, freq);
   return db;
 }
+
 
 const GRID_FREQS = [20, 30, 50, 70, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 const GRID_DBS = [-24, -18, -12, -6, 0, 6, 12, 18, 24];
@@ -134,6 +175,7 @@ export function EqGraph() {
   const setPath = useStudio((s) => s.setPath);
   const setEqKey = useStudio((s) => s.setEqKey);
   const resetSelectedBand = useStudio((s) => s.resetSelectedBand);
+  const toggle = useStudio((s) => s.toggle);
 
   const section = preset?.eq?.[eqKey];
   const eqKeys: string[] = (preset && page in ({ mic:1,music:1,main:1,surround:1,center:1,sub:1,reverb:1,echo:1 } as any))
@@ -159,7 +201,7 @@ export function EqGraph() {
   // move. Recompute from a value signature instead — FabFilter-style live curve.
   const curveSig = section
     ? section.bands.map((b) => `${b.type}|${b.frequencyHz}|${b.q}|${b.gainDb}`).join(";")
-      + `#${section.crossover?.hpfHz}|${section.crossover?.lpfHz}|${section.crossover?.hpTypeRaw}|${section.crossover?.lpTypeRaw}`
+      + `#${section.crossover?.hpfHz}|${section.crossover?.lpfHz}|${section.crossover?.hpType}|${section.crossover?.lpType}|${section.crossover?.hpTypeRaw}|${section.crossover?.lpTypeRaw}`
     : "";
 
   const compositePath = useMemo(() => {
@@ -275,12 +317,19 @@ export function EqGraph() {
           <div className="eyebrow">Parametric EQ · {section.bands.length} bands</div>
           <h3 className="font-display text-sm font-semibold truncate">{section.label}</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {eqKeys.length > 1 && eqKeys.map((k) => (
             <button key={k} onClick={() => setEqKey(k)} className={cn("chrome-btn px-3 py-1 text-[11px] font-display", eqKey === k && "chrome-btn-active")}>
               {(EQ_SECTIONS as Record<string, { label: string }>)[k]?.label || k}
             </button>
           ))}
+          {page === "mic" && preset && (
+            <label className={cn("mic-eq-link-control", preset.mic.eqLink && "active")} title="Link Mic A dan Mic B agar setiap edit PEQ dikirim ke kedua channel">
+              <input type="checkbox" checked={preset.mic.eqLink} onChange={() => toggle("mic.eqLink")} />
+              <span className="mic-eq-link-led" />
+              <span>EQ LINK</span>
+            </label>
+          )}
         </div>
       </header>
       <div className="p-3 min-h-0">

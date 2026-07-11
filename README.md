@@ -1,22 +1,60 @@
-# K500 Preset Studio — Live Alpha
+# SONKUPIK STUDIO — Karaoke Processor
 
-K500 Preset Studio is a professional karaoke processor preset editor with DAW-style UX, live USB HID / Bluetooth transport, preset import/export, parametric EQ, dynamics, filters, and mixer controls.
+Professional K500 karaoke processor preset editor with live USB HID / Bluetooth control, PEQ, crossover, dynamics, mixer controls, device preset recall/save, and mass upload.
 
-## Current focus
-
-- Native-style fader and mixer layout restoration
-- USB HID smart connect and heartbeat stability
-- Bluetooth transport continuity
-- K500 preset editing workflow
-
-## Scripts
+## Development
 
 ```bash
-npm install
+npm ci
 npm run dev
-npm run build
 ```
 
-## Notes
+The Vite development server also starts the native K500 bridge.
 
-The live connection engine is intentionally separated from visual UX work. UI styling changes should not touch the USB/BT transport, heartbeat, HID write, sync, or protocol modules unless the task explicitly targets connection behavior.
+## Production web build
+
+```bash
+npm run build
+npm run test:desktop-server
+```
+
+## Windows portable single EXE
+
+Double-click:
+
+```text
+build-portable-single-exe.cmd
+```
+
+Output:
+
+```text
+release\sonkupik_karaoke.exe
+```
+
+The portable EXE contains its own Chromium and Node runtime. The target PC does not need Node.js installed.
+
+## Windows portable + installer
+
+Double-click:
+
+```text
+build-windows-release.cmd
+```
+
+Or run:
+
+```bash
+npm run dist:windows
+```
+
+Outputs:
+
+```text
+release\sonkupik_karaoke.exe
+release\sonkupik_karaoke_setup_<version>.exe
+```
+
+## Automated release
+
+`.github/workflows/release-windows.yml` builds both artifacts when run manually or when a `v*` tag is pushed. Windows code signing is intentionally not required; signing can be added later through electron-builder environment secrets without changing the app code.

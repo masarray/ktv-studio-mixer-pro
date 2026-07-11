@@ -1,0 +1,75 @@
+name: Release Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example v0.8.30
+        required: true
+        default: v0.8.30
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply release version
+        shell: powershell
+        run: |
+          $version = "$env:RELEASE_VERSION".TrimStart('v')
+          npm version $version --no-git-tag-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Validate embedded desktop server
+        run: npm run test:desktop-server
+
+      - name: Build portable EXE and installer
+        run: npx electron-builder --win portable nsis --x64 --publish never
+
+      - name: Verify artifacts
+        shell: powershell
+        run: |
+          if (!(Test-Path 'release\sonkupik_karaoke.exe')) { throw 'Portable EXE missing' }
+          $installer = Get-ChildItem 'release\sonkupik_karaoke_setup_*.exe' | Select-Object -First 1
+          if (!$installer) { throw 'Installer EXE missing' }
+          Get-ChildItem release\*.exe | Format-Table Name, Length
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonkupik-karaoke-${{ env.RELEASE_VERSION }}
+          if-no-files-found: error
+          path: |
+            release/sonkupik_karaoke.exe
+            release/sonkupik_karaoke_setup_*.exe
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/sonkupik_karaoke.exe
+            release/sonkupik_karaoke_setup_*.exe

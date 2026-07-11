@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStudio } from "@/features/k500/store";
 import { parseK500Preset, serializeK500Preset } from "@/features/k500/parser";
-import { Panel, VerticalFader, Knob, NumberField, Toggle, LedReadout, SelectField } from "./primitives";
+import { Panel, VerticalFader, Knob, NumberField, LedReadout, SelectField } from "./primitives";
 import { filterRangeForEqKey } from "@/features/k500/filterRanges";
+import { FILTER_TYPE_OPTIONS } from "@/features/k500/filterTypes";
 import { useK500Live } from "@/features/k500/live/liveStore";
 import { CompressorGraph } from "./CompressorGraph";
 import { cn } from "@/lib/utils";
@@ -234,8 +235,8 @@ function CompressorPanel({
 export function MicPage() {
   const preset = useStudio((s) => s.preset)!;
   const setPath = useStudio((s) => s.setPath);
-  const toggle = useStudio((s) => s.toggle);
   const p = preset.mic;
+  const c = preset.eq.micA.crossover;
   return (
     <div className="mic-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Input mixer" title="Mic Inputs" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
@@ -247,10 +248,11 @@ export function MicPage() {
       </Panel>
       <CompressorPanel title="Vocal Dynamics" pathPrefix="mic" comp={p} includeGate gateDb={p.noiseGateDb} />
       <Panel eyebrow="Filters" title="Band Limits" className="rack-panel crossover-panel h-full">
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-2 crossover-control-stack">
           <NumberField label="HPF" unit="Hz" min={20} max={20000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
+          <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.micA.crossover.hpType", v)} />
           <NumberField label="LPF" unit="Hz" min={20} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
-          <Toggle label="Mic EQ Link A↔B" value={p.eqLink} onChange={() => toggle("mic.eqLink")} />
+          <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.micA.crossover.lpType", v)} />
         </div>
       </Panel>
     </div>
@@ -313,9 +315,9 @@ export function MusicPage() {
 
       <Panel eyebrow="Filters" title="HPF / LPF" className="rack-panel music-filter-panel crossover-panel h-full" bodyClassName="music-filter-panel-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
         <InlineSlider label="LPF" value={c.lpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
-        <SelectField label="LP Type" value={c.lpType} options={["LP Butter 12", "LP Butter 24", "LP Bessel 12", "LP Bessel 24", "LP LR 24", "Butter 12", c.lpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.lpType", v)} />
+        <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.music.crossover.lpType", v)} />
         <InlineSlider label="HPF" value={c.hpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
-        <SelectField label="HP Type" value={c.hpType} options={["HP Butter 12", "HP Butter 24", "HP Bessel 12", "HP Bessel 24", "HP LR 24", "Butter 12", c.hpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.hpType", v)} />
+        <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.music.crossover.hpType", v)} />
       </Panel>
     </div>
   );
@@ -327,6 +329,7 @@ export function OutputPage({ which }: { which: OutKey }) {
   const preset = useStudio((s) => s.preset)!;
   const setPath = useStudio((s) => s.setPath);
   const o = preset.outputs[which] as any;
+  const crossover = preset.eq[which].crossover;
 
   const title = which === "main" ? "Main Bus" : which === "surround" ? "Surround Bus" : which === "center" ? "Center Bus" : "Subwoofer Bus";
   const eyebrow = which === "main" ? "front output" : which === "surround" ? "rear field" : which === "center" ? "vocal anchor" : "bass management";
@@ -401,11 +404,13 @@ export function OutputPage({ which }: { which: OutKey }) {
       </Panel>
       <CompressorPanel title="Output Compressor" pathPrefix={`outputs.${which}`} comp={o} className="output-dynamics-panel" />
       <Panel eyebrow="Crossover" title="Band Limits / Delay" className="rack-panel crossover-panel h-full">
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-2 crossover-control-stack">
           {filters.map((f) => (
             <NumberField key={f.label} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
               onChange={(v) => setPath(f.path, v)} />
           ))}
+          <SelectField label="HP Type" value={crossover.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath(`eq.${which}.crossover.hpType`, v)} />
+          <SelectField label="LP Type" value={crossover.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath(`eq.${which}.crossover.lpType`, v)} />
         </div>
       </Panel>
     </div>
@@ -417,6 +422,7 @@ export function ReverbPage() {
   const preset = useStudio((s) => s.preset)!;
   const setPath = useStudio((s) => s.setPath);
   const r = preset.effects.reverb;
+  const c = preset.eq.reverb.crossover;
   return (
     <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Room engine" title="Reverb" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
@@ -427,9 +433,11 @@ export function ReverbPage() {
         </FaderRow>
       </Panel>
       <Panel eyebrow="Effect filters" title="Tone" className="rack-panel crossover-panel h-full">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 crossover-control-grid">
           <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("reverb", "hpf").min} max={filterRangeForEqKey("reverb", "hpf").max} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
           <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("reverb", "lpf").min} max={filterRangeForEqKey("reverb", "lpf").max} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
+          <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.reverb.crossover.hpType", v)} />
+          <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.reverb.crossover.lpType", v)} />
         </div>
       </Panel>
     </div>
@@ -441,6 +449,7 @@ export function EchoPage() {
   const preset = useStudio((s) => s.preset)!;
   const setPath = useStudio((s) => s.setPath);
   const e = preset.effects.echo;
+  const c = preset.eq.echo.crossover;
   return (
     <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Delay engine" title="Echo" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
@@ -451,9 +460,11 @@ export function EchoPage() {
         </FaderRow>
       </Panel>
       <Panel eyebrow="Delay filters" title="Tone" className="rack-panel crossover-panel h-full">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 crossover-control-grid">
           <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("echo", "hpf").min} max={filterRangeForEqKey("echo", "hpf").max} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
           <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("echo", "lpf").min} max={filterRangeForEqKey("echo", "lpf").max} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
+          <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.echo.crossover.hpType", v)} />
+          <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.echo.crossover.lpType", v)} />
         </div>
       </Panel>
     </div>

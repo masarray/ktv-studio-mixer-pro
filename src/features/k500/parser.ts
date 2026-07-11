@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { clampFilterHz } from "./filterRanges";
+import { FILTER_TYPE_TO_UI, UI_TO_FILTER_TYPE } from "./filterTypes";
 const CHECKSUM_OFFSET = 0x0475;
 const NAME_OFFSET = 0x0454;
 const NAME_LENGTH = 0x21;
@@ -18,28 +19,6 @@ const UI_TO_EQ_TYPE = {
   LS: 0x0100,
   HS: 0x0200,
 };
-
-const FILTER_TYPE_TO_UI = new Map([
-  [0x0301, "LP Bessel 12"],
-  [0x0401, "HP Bessel 12"],
-  [0x0302, "LP Butter 12"],
-  [0x0402, "HP Butter 12"],
-  [0x0306, "LP Butter 24"],
-  [0x0406, "HP Butter 24"],
-  [0x0307, "LP LR 24"],
-  [0x0407, "HP LR 24"],
-]);
-
-const UI_TO_FILTER_TYPE = Object.freeze({
-  "LP Bessel 12": 0x0301,
-  "HP Bessel 12": 0x0401,
-  "LP Butter 12": 0x0302,
-  "HP Butter 12": 0x0402,
-  "LP Butter 24": 0x0306,
-  "HP Butter 24": 0x0406,
-  "LP LR 24": 0x0307,
-  "HP LR 24": 0x0407,
-});
 
 const EQ_SECTIONS = Object.freeze({
   micA: { label: "Mic A", offset: 0x00f0, bands: 10, channel: "mic" },
@@ -461,7 +440,6 @@ export {
   CHECKSUM_OFFSET,
   EQ_SECTIONS,
   SECTIONS_BY_PAGE,
-  UI_TO_FILTER_TYPE,
   parseK500Preset,
   serializeK500Preset,
   updateChecksum,
