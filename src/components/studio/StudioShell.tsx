@@ -14,10 +14,10 @@ import { MicPage, MusicPage, OutputPage, ReverbPage, EchoPage, SystemPage } from
 import { LiveDevicePill } from "./LiveDevicePanel";
 
 const NAV: { key: PageKey; label: string; desc: string; Icon: any }[] = [
+  { key: "music", label: "Music", desc: "Source & tone", Icon: Music2 },
   { key: "mic", label: "Mic", desc: "Dual vocal input", Icon: Mic2 },
   { key: "reverb", label: "Reverb", desc: "Room tail", Icon: Sparkles },
   { key: "echo", label: "Echo", desc: "Delay engine", Icon: Repeat },
-  { key: "music", label: "Music", desc: "Source & tone", Icon: Music2 },
   { key: "main", label: "Main", desc: "Front output", Icon: Speaker },
   { key: "surround", label: "Surround", desc: "Rear field", Icon: Waves },
   { key: "center", label: "Center", desc: "Vocal focus", Icon: RadioTower },
@@ -41,15 +41,15 @@ function TransportBar() {
           style={{ boxShadow: "inset 0 1px 0 oklch(1 0 0 / 18%), 0 2px 6px oklch(0 0 0 / 60%)" }}>
           <FileMusic size={18} className="text-[color:var(--gold)]" />
         </div>
-        <div className="min-w-0">
+        <div>
           <h1 className="font-display text-sm font-bold leading-none tracking-tight">
-            K500 <span className="text-[color:var(--gold)]">PRESET STUDIO</span>
+            SONKUPIK <span className="text-[color:var(--gold)]">STUDIO</span>
           </h1>
-          <div className="eyebrow mt-0.5">Karaoke Processor · Preset Editor</div>
+          <div className="eyebrow mt-0.5">Karaoke Processor</div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mx-auto min-w-0">
+      <div className="flex items-center gap-2 mx-auto">
         <div className="flex items-center gap-1.5">
           <Led color="green" on={!!preset} />
           <Led color="amber" on={!!preset?.checksumOk} />
@@ -95,7 +95,7 @@ function RackNav() {
   const page = useStudio((s) => s.page);
   const setPage = useStudio((s) => s.setPage);
   return (
-    <nav className="panel-bevel w-[200px] shrink-0 p-2 flex flex-col gap-1.5 overflow-hidden">
+    <nav className="rack-nav panel-bevel shrink-0 p-2 flex flex-col gap-1.5 overflow-hidden">
       <div className="eyebrow px-2 pt-1 pb-2">Sections</div>
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-1.5">
         {NAV.map(({ key, label, desc, Icon }) => {
@@ -114,7 +114,7 @@ function RackNav() {
                        : "border-[color:var(--bevel-hi)] text-muted-foreground group-hover:text-foreground")}>
                 <Icon size={14} />
               </span>
-              <span className="min-w-0">
+              <span>
                 <span className={cn("block text-xs font-display font-semibold leading-tight", active ? "led-cyan" : "text-foreground")}>{label}</span>
                 <span className="block text-[10px] text-muted-foreground leading-tight">{desc}</span>
               </span>
@@ -151,7 +151,7 @@ function PageContent() {
   })();
 
   return (
-    <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+    <main className="studio-page-content flex-1 min-h-0 overflow-hidden">
       <div
         className="grid h-full min-h-0 overflow-hidden gap-3"
         style={{ gridTemplateRows: showEq ? "minmax(0, 1fr) 304px" : "1fr" }}
@@ -175,7 +175,10 @@ export function StudioShell() {
   return (
     <div className="h-screen w-full p-3 flex flex-col gap-3 overflow-hidden">
       <TransportBar />
-      <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
+      <div className={cn(
+        "studio-workspace flex gap-3 flex-1 min-h-0 overflow-hidden",
+        page === "system" ? "studio-workspace-system" : "studio-workspace-peq",
+      )}>
         <RackNav />
         <PageContent />
         <MasterSection />

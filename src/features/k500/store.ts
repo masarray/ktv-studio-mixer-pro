@@ -6,6 +6,7 @@ import {
   EQ_SECTIONS,
 } from "./parser";
 import type { Preset, PageKey, EqSection } from "./types";
+import { clampFilterPathValue } from "./filterRanges";
 import { useK500Live } from "./live/liveStore";
 import sampleUrl from "@/assets/sample.k500?url";
 import { buildPresetFromLiveMemory } from "./live/liveMemory";
@@ -50,6 +51,55 @@ function setPathOn(obj: any, path: string, value: any) {
   const parent = keys.reduce((acc, key) => acc[key], obj);
   const old = parent[last];
   parent[last] = typeof old === "number" ? Number(value) : value;
+}
+
+function setFilterPathWithAliases(preset: Preset, path: string, value: any) {
+  const safeValue = clampFilterPathValue(path, value);
+  setPathOn(preset, path, safeValue);
+
+  const eqMatch = /^eq\.([^.]+)\.crossover\.(hpfHz|lpfHz)$/.exec(path);
+  if (eqMatch) {
+    const eqKey = eqMatch[1];
+    const field = eqMatch[2] as "hpfHz" | "lpfHz";
+    const numeric = Number(safeValue);
+
+    if (eqKey === "micA" || eqKey === "micB") {
+      preset.eq.micA.crossover[field] = numeric;
+      preset.eq.micB.crossover[field] = numeric;
+      preset.mic[field] = numeric;
+      return;
+    }
+    if (eqKey === "sub") {
+      preset.outputs.sub[field] = numeric;
+      return;
+    }
+    if (eqKey === "reverb") {
+      preset.effects.reverb[field] = numeric;
+      return;
+    }
+    if (eqKey === "echo") {
+      preset.effects.echo[field] = numeric;
+      return;
+    }
+    return;
+  }
+
+  const sharedMatch = /^(mic|outputs\.sub|effects\.reverb|effects\.echo)\.(hpfHz|lpfHz)$/.exec(path);
+  if (!sharedMatch) return;
+  const owner = sharedMatch[1];
+  const field = sharedMatch[2] as "hpfHz" | "lpfHz";
+  const numeric = Number(safeValue);
+
+  if (owner === "mic") {
+    preset.eq.micA.crossover[field] = numeric;
+    preset.eq.micB.crossover[field] = numeric;
+  } else if (owner === "outputs.sub") {
+    preset.eq.sub.crossover[field] = numeric;
+  } else if (owner === "effects.reverb") {
+    preset.eq.reverb.crossover[field] = numeric;
+  } else if (owner === "effects.echo") {
+    preset.eq.echo.crossover[field] = numeric;
+  }
 }
 
 
@@ -147,8 +197,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   preset: null,
   originalBytes: null,
   sourceName: "No preset loaded",
-  page: "mic",
-  eqKey: "micA",
+  page: "music",
+  eqKey: "music",
   selectedBand: 0,
   dirty: false,
 
@@ -158,8 +208,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       preset,
       originalBytes: new Uint8Array(preset.bytes),
       sourceName: name,
-      page: "mic",
-      eqKey: "micA",
+      page: "music",
+      eqKey: "music",
       selectedBand: 0,
       dirty: false,
     });
@@ -180,7 +230,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     // doesn't yank them back to the Mic page mid-session.
     const { page, eqKey, selectedBand } = get();
     const keys = (SECTIONS_BY_PAGE as Record<string, string[]>)[page] || [];
-    const nextEqKey = preset.eq[eqKey] ? eqKey : (keys[0] ?? "micA");
+    const nextEqKey = preset.eq[eqKey] ? eqKey : (keys[0] ?? "music");
     const bandCount = preset.eq[nextEqKey]?.bands?.length ?? 0;
     set({
       preset,
@@ -202,8 +252,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       preset,
       originalBytes: new Uint8Array(preset.bytes),
       sourceName: "DEFAULT FLAT",
-      page: "mic",
-      eqKey: "micA",
+      page: "music",
+      eqKey: "music",
       selectedBand: 0,
       dirty: false,
     });
@@ -264,7 +314,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   setPath: (path, value) => {
     const { preset } = get();
     if (!preset) return;
-    setPathOn(preset, path, value);
+    setFilterPathWithAliases(preset, path, value);
     set({ preset: { ...preset }, dirty: true });
     void useK500Live.getState().sendPathUpdate(path, preset);
   },

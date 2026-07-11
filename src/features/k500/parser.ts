@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { clampFilterHz } from "./filterRanges";
 const CHECKSUM_OFFSET = 0x0475;
 const NAME_OFFSET = 0x0454;
 const NAME_LENGTH = 0x21;
@@ -137,14 +138,14 @@ function readCrossover(view, start) {
   };
 }
 
-function writeCrossover(view, start, crossover) {
+function writeCrossover(view, start, crossover, eqKey = "") {
   if (!crossover) return;
   const lpRaw = UI_TO_FILTER_TYPE[crossover.lpType] ?? Number(crossover.lpTypeRaw) ?? 0;
   const hpRaw = UI_TO_FILTER_TYPE[crossover.hpType] ?? Number(crossover.hpTypeRaw) ?? 0;
   view.setUint16(start + 0, lpRaw, true);
-  view.setUint16(start + 2, clamp(Math.round(Number(crossover.lpfHz) || 20000), 20, 20000), true);
+  view.setUint16(start + 2, clampFilterHz(eqKey, "lpf", Math.round(Number(crossover.lpfHz) || 20000)), true);
   view.setUint16(start + 8, hpRaw, true);
-  view.setUint16(start + 10, clamp(Math.round(Number(crossover.hpfHz) || 20), 20, 20000), true);
+  view.setUint16(start + 10, clampFilterHz(eqKey, "hpf", Math.round(Number(crossover.hpfHz) || 20)), true);
 }
 
 function readEqSection(view, key, descriptor) {
@@ -167,7 +168,7 @@ function readEqSection(view, key, descriptor) {
 function writeEqSection(view, section) {
   view.setUint16(section.offset, section.enabledFlag ?? 0, true);
   section.bands.forEach((band, i) => writeEqBand(view, section.offset + 2 + i * 8, band));
-  writeCrossover(view, section.offset + 2 + section.bands.length * 8, section.crossover);
+  writeCrossover(view, section.offset + 2 + section.bands.length * 8, section.crossover, section.key);
 }
 
 function u8(view, offset) {
@@ -368,8 +369,8 @@ function serializeK500Preset(preset) {
   setU8(view, 0x0019, preset.mic.attackMs);
   setU8(view, 0x001a, Math.round(preset.mic.releaseSec * 10));
   setU8(view, 0x0092, preset.mic.eqLink ? 1 : 0);
-  setU16(view, 0x0098, preset.mic.hpfHz);
-  setU16(view, 0x009a, preset.mic.lpfHz);
+  setU16(view, 0x0098, clampFilterHz("micA", "hpf", preset.mic.hpfHz));
+  setU16(view, 0x009a, clampFilterHz("micA", "lpf", preset.mic.lpfHz));
 
   setU8(view, 0x000e, encodeMusicSource(preset.music.source));
   setU8(view, 0x0011, preset.music.key + 7);
@@ -422,35 +423,35 @@ function serializeK500Preset(preset) {
   setU8(view, 0x006d, preset.outputs.sub.compRatio);
   setU8(view, 0x006e, preset.outputs.sub.attackMs);
   setU8(view, 0x006f, Math.round(preset.outputs.sub.releaseSec * 10));
-  setU16(view, 0x00b8, preset.outputs.sub.hpfHz);
-  setU16(view, 0x00bc, preset.outputs.sub.lpfHz);
+  setU16(view, 0x00b8, clampFilterHz("sub", "hpf", preset.outputs.sub.hpfHz));
+  setU16(view, 0x00bc, clampFilterHz("sub", "lpf", preset.outputs.sub.lpfHz));
 
   setU8(view, 0x0074, preset.effects.reverb.level);
-  setU16(view, 0x00c0, preset.effects.reverb.hpfHz);
-  setU16(view, 0x00c2, preset.effects.reverb.lpfHz);
+  setU16(view, 0x00c0, clampFilterHz("reverb", "hpf", preset.effects.reverb.hpfHz));
+  setU16(view, 0x00c2, clampFilterHz("reverb", "lpf", preset.effects.reverb.lpfHz));
   setU16(view, 0x00c8, preset.effects.reverb.decayMs);
   setU16(view, 0x00ca, preset.effects.reverb.predelayMs);
 
   setU8(view, 0x007b, preset.effects.echo.level);
   setU8(view, 0x007c, preset.effects.echo.repeat);
-  setU16(view, 0x00c4, preset.effects.echo.hpfHz);
-  setU16(view, 0x00c6, preset.effects.echo.lpfHz);
+  setU16(view, 0x00c4, clampFilterHz("echo", "hpf", preset.effects.echo.hpfHz));
+  setU16(view, 0x00c6, clampFilterHz("echo", "lpf", preset.effects.echo.lpfHz));
   setU16(view, 0x00cc, preset.effects.echo.leftDelayMs);
 
   Object.values(preset.eq).forEach((section) => writeEqSection(view, section));
 
   // Known duplicated UI/global crossover copies from delta test.
-  view.setUint16(0x0144, preset.mic.lpfHz, true);
-  view.setUint16(0x01a4, preset.mic.lpfHz, true);
-  view.setUint16(0x014c, preset.mic.hpfHz, true);
-  view.setUint16(0x01ac, preset.mic.hpfHz, true);
+  view.setUint16(0x0144, clampFilterHz("micA", "lpf", preset.mic.lpfHz), true);
+  view.setUint16(0x01a4, clampFilterHz("micB", "lpf", preset.mic.lpfHz), true);
+  view.setUint16(0x014c, clampFilterHz("micA", "hpf", preset.mic.hpfHz), true);
+  view.setUint16(0x01ac, clampFilterHz("micB", "hpf", preset.mic.hpfHz), true);
 
-  view.setUint16(0x0394, preset.outputs.sub.lpfHz, true);
-  view.setUint16(0x039c, preset.outputs.sub.hpfHz, true);
-  view.setUint16(0x0404, preset.effects.reverb.lpfHz, true);
-  view.setUint16(0x040c, preset.effects.reverb.hpfHz, true);
-  view.setUint16(0x043c, preset.effects.echo.lpfHz, true);
-  view.setUint16(0x0444, preset.effects.echo.hpfHz, true);
+  view.setUint16(0x0394, clampFilterHz("sub", "lpf", preset.outputs.sub.lpfHz), true);
+  view.setUint16(0x039c, clampFilterHz("sub", "hpf", preset.outputs.sub.hpfHz), true);
+  view.setUint16(0x0404, clampFilterHz("reverb", "lpf", preset.effects.reverb.lpfHz), true);
+  view.setUint16(0x040c, clampFilterHz("reverb", "hpf", preset.effects.reverb.hpfHz), true);
+  view.setUint16(0x043c, clampFilterHz("echo", "lpf", preset.effects.echo.lpfHz), true);
+  view.setUint16(0x0444, clampFilterHz("echo", "hpf", preset.effects.echo.hpfHz), true);
 
   updateChecksum(bytes);
   return bytes;

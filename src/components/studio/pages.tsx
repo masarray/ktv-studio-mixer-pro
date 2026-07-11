@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStudio } from "@/features/k500/store";
-import { serializeK500Preset } from "@/features/k500/parser";
+import { parseK500Preset, serializeK500Preset } from "@/features/k500/parser";
 import { Panel, VerticalFader, Knob, NumberField, Toggle, LedReadout, SelectField } from "./primitives";
+import { filterRangeForEqKey } from "@/features/k500/filterRanges";
+import { useK500Live } from "@/features/k500/live/liveStore";
 import { CompressorGraph } from "./CompressorGraph";
 import { cn } from "@/lib/utils";
 
@@ -77,21 +79,127 @@ function InlineSlider({
   );
 }
 
+
+function formatKeyStep(step: number) {
+  return step < 0 ? `♭${Math.abs(step)}` : step > 0 ? `♯${step}` : "0";
+}
+
+function PitchTapeControl({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const current = Math.max(-7, Math.min(7, Math.round(Number(value) || 0)));
+  const [direction, setDirection] = useState<"left" | "right" | "idle">("idle");
+
+  const commit = (nextValue: number) => {
+    const next = Math.max(-7, Math.min(7, Math.round(nextValue)));
+    if (next === current) return;
+    setDirection(next > current ? "right" : "left");
+    onChange(next);
+  };
+
+  const windowSteps = Array.from({ length: 5 }, (_, index) => current + index - 2);
+
+  return (
+    <div className="pitch-tape-control">
+      <div className="pitch-tape-shell">
+        <button
+          type="button"
+          className="pitch-tape-arrow"
+          onClick={() => commit(current - 1)}
+          disabled={current <= -7}
+          aria-label="Turunkan pitch satu semitone"
+        >
+          &lt;
+        </button>
+
+        <div
+          className="pitch-tape-window"
+          tabIndex={0}
+          role="slider"
+          aria-label="Karaoke pitch"
+          aria-valuemin={-7}
+          aria-valuemax={7}
+          aria-valuenow={current}
+          aria-valuetext={current === 0 ? "Original" : formatKeyStep(current)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+              event.preventDefault();
+              commit(current - 1);
+            } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+              event.preventDefault();
+              commit(current + 1);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              commit(0);
+            }
+          }}
+          onWheel={(event) => {
+            event.preventDefault();
+            commit(current + (event.deltaY < 0 ? 1 : -1));
+          }}
+        >
+          <div
+            key={`${current}-${direction}`}
+            className={cn(
+              "pitch-tape-strip",
+              direction === "left" && "pitch-tape-slide-left",
+              direction === "right" && "pitch-tape-slide-right",
+            )}
+          >
+            {windowSteps.map((step, index) => {
+              const available = step >= -7 && step <= 7;
+              return available ? (
+                <button
+                  type="button"
+                  key={step}
+                  className={cn("pitch-tape-mark", index === 2 && "active")}
+                  onClick={() => commit(step)}
+                  tabIndex={-1}
+                  aria-label={`Set pitch ${step === 0 ? "original" : formatKeyStep(step)}`}
+                >
+                  {formatKeyStep(step)}
+                </button>
+              ) : (
+                <span key={`empty-${index}`} className="pitch-tape-mark empty" aria-hidden="true">·</span>
+              );
+            })}
+          </div>
+          <span className="pitch-tape-center-line" aria-hidden="true" />
+        </div>
+
+        <button
+          type="button"
+          className="pitch-tape-arrow"
+          onClick={() => commit(current + 1)}
+          disabled={current >= 7}
+          aria-label="Naikkan pitch satu semitone"
+        >
+          &gt;
+        </button>
+      </div>
+      <div className="pitch-tape-status">
+        <span>KEY DOWN</span>
+        <strong>{current === 0 ? "ORIGINAL" : formatKeyStep(current)}</strong>
+        <span>KEY UP</span>
+      </div>
+    </div>
+  );
+}
+
 function CompressorPanel({
-  title, pathPrefix, comp, includeGate = false, gateDb,
+  title, pathPrefix, comp, includeGate = false, gateDb, className,
 }: {
   title: string;
   pathPrefix: string;
   comp: { compThresholdDb: number; compRatio: number; attackMs: number; releaseSec: number };
   includeGate?: boolean;
   gateDb?: number;
+  className?: string;
 }) {
   const setPath = useStudio((s) => s.setPath);
   return (
     <Panel
       eyebrow="Dynamics"
       title={title}
-      className="rack-panel h-full"
+      className={cn("rack-panel h-full", className)}
       bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible"
       right={
         <div className="flex items-center gap-1.5">
@@ -129,7 +237,7 @@ export function MicPage() {
   const toggle = useStudio((s) => s.toggle);
   const p = preset.mic;
   return (
-    <div className="grid grid-cols-[280px_1fr_240px] gap-3 h-full items-stretch">
+    <div className="mic-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Input mixer" title="Mic Inputs" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
           <VerticalFader label="MIC A" value={p.micAVol} min={0} max={100} onChange={(v) => setPath("mic.micAVol", v)} active />
@@ -138,10 +246,10 @@ export function MicPage() {
         </FaderRow>
       </Panel>
       <CompressorPanel title="Vocal Dynamics" pathPrefix="mic" comp={p} includeGate gateDb={p.noiseGateDb} />
-      <Panel eyebrow="Filters" title="Band Limits" className="rack-panel h-full">
+      <Panel eyebrow="Filters" title="Band Limits" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-1 gap-3">
           <NumberField label="HPF" unit="Hz" min={20} max={20000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
-          <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
+          <NumberField label="LPF" unit="Hz" min={20} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
           <Toggle label="Mic EQ Link A↔B" value={p.eqLink} onChange={() => toggle("mic.eqLink")} />
         </div>
       </Panel>
@@ -165,11 +273,9 @@ export function MusicPage() {
     ["UDisk", "UDISK", "uDiskGainDb"],
     ["Digital", "DIG", "digitalGainDb"],
   ];
-  const steps = Array.from({ length: 15 }, (_, i) => i - 7);
-  const keyLabel = (n: number) => n < 0 ? `♭${Math.abs(n)}` : n > 0 ? `♯${n}` : "0";
 
   return (
-    <div className="music-page grid grid-cols-[minmax(520px,1fr)_278px_260px] gap-3 h-full items-stretch">
+    <div className="music-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Source Router" title="Music Input" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow className="w-full justify-evenly gap-3">
           {sources.map(([src, label, field]) => (
@@ -194,14 +300,8 @@ export function MusicPage() {
         </FaderRow>
       </Panel>
 
-      <Panel eyebrow="Karaoke Key" title="Pitch Shifter" className="rack-panel h-full" right={<LedReadout value={p.key === 0 ? "ORIG" : keyLabel(p.key)} color="cyan" />}>
-        <div className="grid grid-cols-5 gap-1.5 mb-3">
-          {steps.map((step) => (
-            <button key={step} onClick={() => setMusicKey(step)} className={cn("chrome-btn py-2 text-xs font-mono", Number(p.key) === step && "chrome-btn-active")}>
-              {keyLabel(step)}
-            </button>
-          ))}
-        </div>
+      <Panel eyebrow="Karaoke Key" title="Pitch Shifter" className="rack-panel h-full">
+        <PitchTapeControl value={Number(p.key)} onChange={setMusicKey} />
         <div className="music-filter-stack grid gap-2">
           <InlineSlider label="Noise Gate" value={p.noiseGateDb ?? -70} min={-80} max={0} unit="dB" onChange={(v) => setPath("music.noiseGateDb", v)} />
           <InlineSlider label="Bass" value={p.bassDb ?? 0} min={-12} max={12} step={0.5} unit="dB" onChange={(v) => setPath("music.bassDb", v)} />
@@ -211,8 +311,8 @@ export function MusicPage() {
         </div>
       </Panel>
 
-      <Panel eyebrow="Filters" title="HPF / LPF" className="rack-panel music-filter-panel h-full" bodyClassName="music-filter-panel-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-        <InlineSlider label="LPF" value={c.lpfHz} min={1000} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
+      <Panel eyebrow="Filters" title="HPF / LPF" className="rack-panel music-filter-panel crossover-panel h-full" bodyClassName="music-filter-panel-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+        <InlineSlider label="LPF" value={c.lpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
         <SelectField label="LP Type" value={c.lpType} options={["LP Butter 12", "LP Butter 24", "LP Bessel 12", "LP Bessel 24", "LP LR 24", "Butter 12", c.lpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.lpType", v)} />
         <InlineSlider label="HPF" value={c.hpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
         <SelectField label="HP Type" value={c.hpType} options={["HP Butter 12", "HP Butter 24", "HP Bessel 12", "HP Bessel 24", "HP LR 24", "Butter 12", c.hpType].filter((v, i, a) => v && a.indexOf(v) === i)} onChange={(v) => setPath("eq.music.crossover.hpType", v)} />
@@ -253,35 +353,44 @@ export function OutputPage({ which }: { which: OutKey }) {
   const filters = (() => {
     if (which === "main") {
       const c = preset.eq.main.crossover;
+      const hpRange = filterRangeForEqKey("main", "hpf");
+      const lpRange = filterRangeForEqKey("main", "lpf");
       return [
-        { label: "HPF", path: "eq.main.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
-        { label: "LPF", path: "eq.main.crossover.lpfHz", value: c.lpfHz, min: 2000, max: 20000 },
+        { label: "HPF", path: "eq.main.crossover.hpfHz", value: c.hpfHz, min: hpRange.min, max: hpRange.max },
+        { label: "LPF", path: "eq.main.crossover.lpfHz", value: c.lpfHz, min: lpRange.min, max: lpRange.max },
       ];
     }
     if (which === "surround") {
       const c = preset.eq.surround.crossover;
+      const hpRange = filterRangeForEqKey("surround", "hpf");
+      const lpRange = filterRangeForEqKey("surround", "lpf");
       return [
         { label: "L Delay", unit: "ms", path: "outputs.surround.lDelayMs", value: o.lDelayMs, min: 0, max: 50 },
         { label: "R Delay", unit: "ms", path: "outputs.surround.rDelayMs", value: o.rDelayMs, min: 0, max: 50 },
-        { label: "HPF", path: "eq.surround.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
-        { label: "LPF", path: "eq.surround.crossover.lpfHz", value: c.lpfHz, min: 1000, max: 20000 },
+        { label: "HPF", path: "eq.surround.crossover.hpfHz", value: c.hpfHz, min: hpRange.min, max: hpRange.max },
+        { label: "LPF", path: "eq.surround.crossover.lpfHz", value: c.lpfHz, min: lpRange.min, max: lpRange.max },
       ];
     }
     if (which === "center") {
       const c = preset.eq.center.crossover;
+      const hpRange = filterRangeForEqKey("center", "hpf");
+      const lpRange = filterRangeForEqKey("center", "lpf");
       return [
-        { label: "HPF", path: "eq.center.crossover.hpfHz", value: c.hpfHz, min: 20, max: 20000 },
-        { label: "LPF", path: "eq.center.crossover.lpfHz", value: c.lpfHz, min: 1000, max: 20000 },
+        { label: "HPF", path: "eq.center.crossover.hpfHz", value: c.hpfHz, min: hpRange.min, max: hpRange.max },
+        { label: "LPF", path: "eq.center.crossover.lpfHz", value: c.lpfHz, min: lpRange.min, max: lpRange.max },
       ];
     }
+    const c = preset.eq.sub.crossover;
+    const hpRange = filterRangeForEqKey("sub", "hpf");
+    const lpRange = filterRangeForEqKey("sub", "lpf");
     return [
-      { label: "HPF", path: "outputs.sub.hpfHz", value: o.hpfHz, min: 20, max: 300 },
-      { label: "LPF", path: "outputs.sub.lpfHz", value: o.lpfHz, min: 40, max: 500 },
+      { label: "HPF", path: "eq.sub.crossover.hpfHz", value: c.hpfHz, min: hpRange.min, max: hpRange.max },
+      { label: "LPF", path: "eq.sub.crossover.lpfHz", value: c.lpfHz, min: lpRange.min, max: lpRange.max },
     ];
   })();
 
   return (
-    <div className="grid grid-cols-[1fr_1fr_280px] gap-3 h-full items-stretch">
+    <div className="output-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow={eyebrow} title={title} className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
           {faders.map((f) => (
@@ -290,8 +399,8 @@ export function OutputPage({ which }: { which: OutKey }) {
           ))}
         </FaderRow>
       </Panel>
-      <CompressorPanel title="Output Compressor" pathPrefix={`outputs.${which}`} comp={o} />
-      <Panel eyebrow="Crossover" title="Band Limits / Delay" className="rack-panel h-full">
+      <CompressorPanel title="Output Compressor" pathPrefix={`outputs.${which}`} comp={o} className="output-dynamics-panel" />
+      <Panel eyebrow="Crossover" title="Band Limits / Delay" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-1 gap-3">
           {filters.map((f) => (
             <NumberField key={f.label} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
@@ -309,7 +418,7 @@ export function ReverbPage() {
   const setPath = useStudio((s) => s.setPath);
   const r = preset.effects.reverb;
   return (
-    <div className="grid grid-cols-[1fr_320px] gap-3 h-full items-stretch">
+    <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Room engine" title="Reverb" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
           <VerticalFader label="LEVEL" value={r.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.reverb.level", v)} active />
@@ -317,10 +426,10 @@ export function ReverbPage() {
           <VerticalFader label="PRE" value={r.predelayMs} min={0} max={300} unit="ms" onChange={(v) => setPath("effects.reverb.predelayMs", v)} />
         </FaderRow>
       </Panel>
-      <Panel eyebrow="Effect filters" title="Tone" className="rack-panel h-full">
+      <Panel eyebrow="Effect filters" title="Tone" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-2 gap-3">
-          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
-          <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
+          <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("reverb", "hpf").min} max={filterRangeForEqKey("reverb", "hpf").max} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
+          <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("reverb", "lpf").min} max={filterRangeForEqKey("reverb", "lpf").max} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
         </div>
       </Panel>
     </div>
@@ -333,7 +442,7 @@ export function EchoPage() {
   const setPath = useStudio((s) => s.setPath);
   const e = preset.effects.echo;
   return (
-    <div className="grid grid-cols-[1fr_320px] gap-3 h-full items-stretch">
+    <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Delay engine" title="Echo" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
           <VerticalFader label="LEVEL" value={e.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.echo.level", v)} active />
@@ -341,10 +450,10 @@ export function EchoPage() {
           <VerticalFader label="DELAY" value={e.leftDelayMs} min={0} max={1000} unit="ms" onChange={(v) => setPath("effects.echo.leftDelayMs", v)} />
         </FaderRow>
       </Panel>
-      <Panel eyebrow="Delay filters" title="Tone" className="rack-panel h-full">
+      <Panel eyebrow="Delay filters" title="Tone" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-2 gap-3">
-          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
-          <NumberField label="LPF" unit="Hz" min={1000} max={20000} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
+          <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("echo", "hpf").min} max={filterRangeForEqKey("echo", "hpf").max} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
+          <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("echo", "lpf").min} max={filterRangeForEqKey("echo", "lpf").max} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
         </div>
       </Panel>
     </div>
@@ -567,6 +676,11 @@ function usePcPresetLibrary() {
     }
   }, [importBuffer]);
 
+  const readPreset = useCallback(async (file: string) => {
+    const msg = await bridgeRequest<{ t: "pcPresetBytes"; file: string; name: string; hex: string }>({ t: "readPcPreset", file }, "pcPresetBytes", 5000);
+    return parseK500Preset(hexToArrayBuffer(msg.hex));
+  }, []);
+
   const saveCurrent = useCallback(async () => {
     if (!preset) return;
     const file = safePresetFileName(preset.name || "K500_PRESET");
@@ -591,7 +705,7 @@ function usePcPresetLibrary() {
     }
   }, [exportPreset, preset, root]);
 
-  return { items, root, status, busyFile, refresh, load, saveCurrent };
+  return { items, root, status, busyFile, refresh, load, readPreset, saveCurrent, setStatus };
 }
 
 export function SystemPage() {
@@ -599,6 +713,16 @@ export function SystemPage() {
   const sourceName = useStudio((s) => s.sourceName);
   const setPath = useStudio((s) => s.setPath);
   const setName = useStudio((s) => s.setName);
+  const liveStatus = useK500Live((s) => s.status);
+  const useInitVolume = useK500Live((s) => s.useInitVolume);
+  const recallBusy = useK500Live((s) => s.recallBusy);
+  const storeBusy = useK500Live((s) => s.storeBusy);
+  const storeProgress = useK500Live((s) => s.storeProgress);
+  const transportMode = useK500Live((s) => s.transportMode);
+  const setUseInitVolume = useK500Live((s) => s.setUseInitVolume);
+  const recallMode = useK500Live((s) => s.recallMode);
+  const savePresetToSlot = useK500Live((s) => s.savePresetToSlot);
+  const massUploadSlots = useK500Live((s) => s.massUploadSlots);
   const s = preset.system;
   const pc = usePcPresetLibrary();
   const modeNames = useMemo(() => {
@@ -619,6 +743,35 @@ export function SystemPage() {
   const selectedModeName = modeNames[selectedModeIndex - 1] || preset.name || "KARAOKE ARTIST";
   const activeModeName = modeNames[activeModeIndex - 1] || preset.name || "KARAOKE ARTIST";
   const selectedPcFile = pc.items.find((item) => normalizeModeName(item.file) === normalizeModeName(sourceName));
+
+  const permanentStoreReady = liveStatus === "connected" && transportMode === "usb" && !recallBusy && !storeBusy;
+
+  const uploadCurrentToSelectedSlot = useCallback(async () => {
+    pc.setStatus(`Uploading ${preset.name} to device slot ${selectedModeIndex}...`);
+    await savePresetToSlot(selectedModeIndex, preset);
+    const live = useK500Live.getState();
+    pc.setStatus(live.lastError ? `Upload gagal: ${live.lastError}` : `Preset tersimpan ke device slot ${selectedModeIndex}`);
+  }, [pc, preset, savePresetToSlot, selectedModeIndex]);
+
+  const massUploadPcLibrary = useCallback(async () => {
+    const source = pc.items.slice(0, 10);
+    if (!source.length) {
+      pc.setStatus("Tidak ada preset PC untuk Mass Upload.");
+      return;
+    }
+    try {
+      pc.setStatus(`Reading ${source.length} preset untuk Mass Upload...`);
+      const slots = [];
+      for (const item of source) {
+        slots.push({ slotOneBased: item.slot, preset: await pc.readPreset(item.file) });
+      }
+      await massUploadSlots(slots);
+      const live = useK500Live.getState();
+      pc.setStatus(live.lastError ? `Mass Upload gagal: ${live.lastError}` : `${source.length} preset dikirim ke device. ${live.storeProgress}`);
+    } catch (err) {
+      pc.setStatus(err instanceof Error ? err.message : String(err));
+    }
+  }, [massUploadSlots, pc]);
 
   return (
     <div className="system-page h-full min-h-0 grid gap-3 overflow-hidden">
@@ -657,10 +810,24 @@ export function SystemPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 shrink-0">
-          <SystemButton onClick={pc.saveCurrent}>Save to PC</SystemButton>
-          <SystemButton disabled title="Upload permanen ke device belum diaktifkan sampai command store diverifikasi.">Upload to device</SystemButton>
-          <SystemButton disabled title="Mass upload belum diaktifkan sampai command store/slot diverifikasi.">Mass upload</SystemButton>
+        <div className="system-critical-actions grid grid-cols-3 gap-2 shrink-0">
+          <SystemButton disabled={storeBusy} onClick={pc.saveCurrent}>Save to PC</SystemButton>
+          <SystemButton
+            active={storeBusy}
+            disabled={!permanentStoreReady}
+            title={transportMode !== "usb" ? "Pilih dan connect USB HID untuk permanent upload." : `Upload preset editor ke device slot ${selectedModeIndex}.`}
+            onClick={() => void uploadCurrentToSelectedSlot()}
+          >
+            {storeBusy ? "Uploading…" : "Upload to device"}
+          </SystemButton>
+          <SystemButton
+            active={storeBusy}
+            disabled={!permanentStoreReady || pc.items.length === 0}
+            title={transportMode !== "usb" ? "Mass Upload terverifikasi melalui USB HID." : "Upload maksimal 10 file PC ke slot 10→1 lalu Recall slot 1."}
+            onClick={() => void massUploadPcLibrary()}
+          >
+            {storeBusy ? "Uploading…" : "Mass upload"}
+          </SystemButton>
         </div>
       </Panel>
 
@@ -678,7 +845,7 @@ export function SystemPage() {
         <div className="system-preset-list system-device-list panel-inset shrink-0 overflow-hidden p-2">
           {modeNames.map((name, idx) => {
             const slot = idx + 1;
-            const active = slot === activeModeIndex || normalizeModeName(name) === normalizeModeName(preset.name);
+            const active = slot === activeModeIndex;
             const selected = slot === selectedModeIndex;
             return (
               <button
@@ -699,15 +866,33 @@ export function SystemPage() {
           <SystemTextField label="Slot" value={selectedModeIndex} disabled />
           <SystemTextField label="Name" value={selectedModeName} onChange={(v) => setName(v)} />
         </div>
-        <div className="flex flex-wrap gap-2 shrink-0">
-          <SystemCheck label="Use init vol" />
-          <SystemCheck label="USB" checked />
-          <SystemCheck label="BT" />
+        <div className="system-critical-options flex flex-wrap gap-2 shrink-0">
+          <SystemCheck
+            label="Use init volume"
+            checked={useInitVolume}
+            disabled={recallBusy || storeBusy || liveStatus !== "connected"}
+            onChange={(v) => void setUseInitVolume(v)}
+          />
+          {(storeBusy || storeProgress) && <span className="system-store-progress">{storeProgress}</span>}
         </div>
-        <div className="grid grid-cols-3 gap-2 shrink-0">
-          <SystemButton disabled title="Recall slot permanen belum diaktifkan sampai command native diverifikasi.">Recall</SystemButton>
-          <SystemButton disabled title="Save slot permanen belum diaktifkan sampai command native diverifikasi.">Save</SystemButton>
-          <SystemButton disabled title="Reset all setting belum diaktifkan sampai command native diverifikasi.">Reset all</SystemButton>
+        <div className="system-critical-actions grid grid-cols-3 gap-2 shrink-0">
+          <SystemButton
+            active={recallBusy}
+            disabled={liveStatus !== "connected" || recallBusy || storeBusy}
+            title={liveStatus !== "connected" ? "Connect ke device dahulu." : "Recall slot terpilih lalu refresh seluruh memory dari device."}
+            onClick={() => void recallMode(selectedModeIndex)}
+          >
+            {recallBusy ? "Recalling…" : "Recall"}
+          </SystemButton>
+          <SystemButton
+            active={storeBusy}
+            disabled={!permanentStoreReady}
+            title={transportMode !== "usb" ? "Save slot permanen terverifikasi melalui USB HID." : `Save preset editor ke slot ${selectedModeIndex}.`}
+            onClick={() => void savePresetToSlot(selectedModeIndex, preset)}
+          >
+            {storeBusy ? "Saving…" : "Save"}
+          </SystemButton>
+          <SystemButton disabled title="Reset all setting belum diaktifkan karena belum ada sniff native yang aman.">Reset all</SystemButton>
         </div>
       </Panel>
 

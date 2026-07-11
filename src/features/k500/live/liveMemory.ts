@@ -1,6 +1,7 @@
 
 import { parseK500Preset, serializeK500Preset } from "@/features/k500/parser";
 import type { Preset } from "@/features/k500/types";
+import { clampFilterHz } from "@/features/k500/filterRanges";
 
 const NAME_OFFSET = 0x0454;
 const NAME_LENGTH = 0x21;
@@ -178,8 +179,8 @@ export function buildPresetFromLiveMemory(basePresetBytes: Uint8Array, liveMemor
       if (!scalars) continue;
       const footer = section.fileOffset + 2 + section.bands * 8;
       if (footer + 11 >= bytes.length) continue;
-      const hpf = clamp(view.getUint16(scalars.hpf, true), 20, 20000);
-      const lpf = clamp(view.getUint16(scalars.lpf, true), 20, 20000);
+      const hpf = clampFilterHz(key, "hpf", view.getUint16(scalars.hpf, true));
+      const lpf = clampFilterHz(key, "lpf", view.getUint16(scalars.lpf, true));
       view.setUint16(footer + 2, lpf, true); // footer: lpType, lpfHz, ..., hpType, hpfHz
       view.setUint16(footer + 10, hpf, true);
     }
@@ -211,3 +212,42 @@ export function buildPresetFromLiveMemory(basePresetBytes: Uint8Array, liveMemor
   preset.checksumOk = true;
   return preset;
 }
+/**
+ * Build the exact 0x0290-byte equipment-slot image used by native CMD 0x41/0x42/0x43.
+ * The map is the inverse of buildPresetFromLiveMemory(): scalar bytes use the
+ * verified split delta, EQ records are compacted from 8 bytes to 5 bytes, and
+ * the native tail/name fields are copied from their .k500 locations.
+ */
+export function buildDeviceSlotImage(preset: Preset): Uint8Array {
+  const fileBytes = serializeK500Preset(structuredClone(preset));
+  const live = new Uint8Array(0x0290);
+
+  for (let i = 0; i < 0x00e7; i++) {
+    const delta = i < LIVE_SCALAR_SPLIT ? LIVE_SCALAR_DELTA_LOW : LIVE_SCALAR_DELTA_HIGH;
+    live[i] = fileBytes[i + delta] ?? 0;
+  }
+
+  const fileView = new DataView(fileBytes.buffer, fileBytes.byteOffset, fileBytes.byteLength);
+  for (const section of Object.values(LIVE_EQ_SECTIONS)) {
+    for (let i = 0; i < section.bands; i++) {
+      const src = section.fileOffset + 2 + i * 8;
+      const dst = section.liveOffset + i * 5;
+      if (src + 7 >= fileBytes.length || dst + 4 >= live.length) continue;
+      const typeRaw = fileView.getUint16(src + 0, true);
+      const frequency = fileView.getUint16(src + 2, true);
+      const qRaw = fileView.getUint16(src + 4, true);
+      const gainRaw = fileView.getInt16(src + 6, true);
+      const typeNibble = typeRaw === 0x0100 ? 0x10 : typeRaw === 0x0200 ? 0x20 : 0x00;
+      live[dst + 0] = frequency & 0xff;
+      live[dst + 1] = (frequency >> 8) & 0xff;
+      live[dst + 2] = clamp(qRaw, 1, 0xff);
+      live[dst + 3] = typeNibble | (gainRaw < 0 ? 0x80 : 0x00);
+      live[dst + 4] = clamp(Math.abs(gainRaw), 0, 0xff);
+    }
+  }
+
+  live.set(fileBytes.slice(0x044c, 0x0450), 0x027c);
+  live.set(fileBytes.slice(NAME_OFFSET, NAME_OFFSET + LIVE_MODE_NAME_LENGTH), 0x0280);
+  return live;
+}
+

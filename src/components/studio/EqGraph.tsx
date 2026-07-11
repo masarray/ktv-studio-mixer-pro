@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useStudio } from "@/features/k500/store";
 import { EQ_SECTIONS } from "@/features/k500/parser";
 import type { EqBand, EqCrossover } from "@/features/k500/types";
+import { filterRangeForEqKey } from "@/features/k500/filterRanges";
 import { cn } from "@/lib/utils";
 
 const MIN_FREQ = 20;
@@ -196,15 +197,19 @@ export function EqGraph() {
       const y = ((e.clientY - rect.top) / rect.height) * H;
 
       // Draggable HP/LP crossover handles, like the yellow pucks in the
-      // original Professional Audio System UI. File-model edit only —
-      // no confirmed live crossover command exists yet.
+      // original Professional Audio System UI. Ranges must match the native
+      // section limits: normal sections are 20..20000 Hz, Reverb/Echo use a
+      // narrower effect-filter range.
       if (drag.kind !== "band") {
         const freq = xToFreq(x);
-        const c = section.crossover;
+        const hpRange = filterRangeForEqKey(section.key, "hpf");
+        const lpRange = filterRangeForEqKey(section.key, "lpf");
         if (drag.kind === "hp") {
-          setPath(`eq.${section.key}.crossover.hpfHz`, clamp(freq, MIN_FREQ, Math.min(MAX_FREQ, (c?.lpfHz ?? MAX_FREQ) - 10)));
+          // HPF and LPF are independent native parameters. Do not constrain
+          // one against the other: the device allows them to cross/overlap.
+          setPath(`eq.${section.key}.crossover.hpfHz`, clamp(freq, hpRange.min, hpRange.max));
         } else {
-          setPath(`eq.${section.key}.crossover.lpfHz`, clamp(freq, Math.max(200, (c?.hpfHz ?? MIN_FREQ) + 10), MAX_FREQ));
+          setPath(`eq.${section.key}.crossover.lpfHz`, clamp(freq, lpRange.min, lpRange.max));
         }
         return;
       }
@@ -339,20 +344,31 @@ export function EqGraph() {
               const cx = freqToX(freq);
               const cy = gainToY(0);
               const dragging = dragRef.current?.kind === kind;
+              const beginCrossoverDrag = (e: React.PointerEvent<SVGElement>) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                dragRef.current = { kind };
+              };
               return (
                 <g key={kind}>
                   <line x1={cx} x2={cx} y1={PAD.top} y2={H - PAD.bottom} stroke="oklch(0.82 0.18 78 / 35%)" strokeDasharray="4 5" pointerEvents="none" />
                   <text x={kind === "hp" ? cx + 12 : cx - 12} y={PAD.top + 14} fontSize="9" fontFamily="JetBrains Mono" fill="oklch(0.82 0.18 78 / 85%)" textAnchor={kind === "hp" ? "start" : "end"} pointerEvents="none">{sub} Hz</text>
+                  {/* Wide invisible hit target: the full vertical HP/LP line is draggable, not only the puck. */}
+                  <line
+                    x1={cx} x2={cx} y1={PAD.top} y2={H - PAD.bottom}
+                    stroke="transparent" strokeWidth={24}
+                    pointerEvents="stroke"
+                    style={{ cursor: "ew-resize", touchAction: "none" }}
+                    onPointerDown={beginCrossoverDrag}
+                  />
                   {/* Draggable crossover puck on the 0 dB line, like the native app */}
                   <circle
                     cx={cx} cy={cy} r={9}
                     fill="oklch(0.82 0.18 78)"
                     stroke="oklch(0 0 0 / 75%)" strokeWidth={1.5}
-                    style={{ filter: `drop-shadow(0 0 ${dragging ? 10 : 5}px oklch(0.82 0.18 78 / 70%))`, cursor: "ew-resize" }}
-                    onPointerDown={(e) => {
-                      (e.currentTarget as SVGCircleElement).setPointerCapture(e.pointerId);
-                      dragRef.current = { kind };
-                    }}
+                    style={{ filter: `drop-shadow(0 0 ${dragging ? 10 : 5}px oklch(0.82 0.18 78 / 70%))`, cursor: "ew-resize", touchAction: "none" }}
+                    onPointerDown={beginCrossoverDrag}
                   />
                   <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono" fontStyle="italic" fill="oklch(0.1 0 0)" fontWeight="800" pointerEvents="none">{label}</text>
                 </g>
@@ -410,9 +426,6 @@ export function EqGraph() {
               <span>B{b.index}</span><strong>{b.type}</strong><em>{formatFreq(b.frequencyHz)}</em><small>{b.gainDb > 0 ? "+" : ""}{b.gainDb.toFixed(1)}</small>
             </button>
           ))}
-        </div>
-        <div className="hidden lg:flex items-center gap-3 text-[10px] font-mono text-muted-foreground shrink-0">
-          <span>drag = freq/gain</span><span>wheel · ctrl+drag = Q</span><span>shift = fine</span><span>2×click = 0 dB</span>
         </div>
       </footer>
     </div>

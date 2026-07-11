@@ -150,9 +150,11 @@ class UsbTransport {
   constructor(hidDev, label) { this.dev = hidDev; this.label = label; this.kind = "usb"; }
   async write(btFrame) {
     const usb = toUsbFrame(btFrame);
-    const report = Buffer.alloc(65); // [reportId 0x00] + 64 data bytes (node-hid convention)
-    usb.copy(report, 1);
-    this.dev.write(Array.from(report));
+    for (let offset = 0; offset < usb.length; offset += 64) {
+      const report = Buffer.alloc(65); // [reportId 0x00] + 64 data bytes
+      usb.subarray(offset, offset + 64).copy(report, 1);
+      this.dev.write(Array.from(report));
+    }
   }
   onData(cb) { this.dev.on("data", cb); }
   async close() { try { this.dev.close(); } catch {} }

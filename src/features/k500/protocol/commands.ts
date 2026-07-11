@@ -1,5 +1,6 @@
-import type { EqBand, Preset } from "@/features/k500/types";
+import type { EqBand, EqCrossover, Preset } from "@/features/k500/types";
 import { buildFrame, byte } from "./frame";
+import { clampFilterHz } from "@/features/k500/filterRanges";
 
 export const EQ_SECTION_ID: Record<string, number> = Object.freeze({
   micA: 0x00,
@@ -54,6 +55,95 @@ export function buildHandshake(): Uint8Array {
   return buildFrame([0x01, 0x3f]);
 }
 
+export const DEVICE_ROUTE_USB = 0x01;
+export const DEVICE_ROUTE_BT = 0x02;
+
+function routeMaskByte(mask: number): number {
+  return byte(Number(mask) & (DEVICE_ROUTE_USB | DEVICE_ROUTE_BT));
+}
+
+/**
+ * Recall one of the ten Equipment Mode slots. Native USB captures prove the
+ * payload is `[slotZeroBased, routeMask]`:
+ *
+ *   Mode 1, USB+BT: AA 03 00 01 00 03 F9
+ *   Mode 4, USB   : AA 03 00 01 03 01 F8
+ *
+ * `toUsbFrame()` inserts the USB length high-byte; this builder intentionally
+ * stays in the shared BT-style framing used by every command builder.
+ */
+export function buildRecallMode(slotOneBased: number, routeMask: number): Uint8Array {
+  const slotZeroBased = byte(clamp(Math.round(Number(slotOneBased) || 1), 1, 10) - 1);
+  return buildFrame([0x03, 0x01, slotZeroBased, routeMaskByte(routeMask)]);
+}
+
+/** Native recall refresh handshake, sent immediately after CMD 0x01. */
+export function buildRecallHandshake(routeMask: number): Uint8Array {
+  return buildFrame([0x03, 0x3f, 0x00, routeMaskByte(routeMask)]);
+}
+
+/**
+ * Native `Use init vol` toggle. The final byte is the same USB/BT destination
+ * mask used by Recall, not a hard-coded USB-only flag.
+ *
+ *   OFF, USB: AA 03 00 12 00 01 EA
+ *   ON,  USB: AA 03 00 12 01 01 E9
+ */
+export function buildUseInitVolume(enabled: boolean, routeMask: number): Uint8Array {
+  return buildFrame([0x03, 0x12, enabled ? 0x01 : 0x00, routeMaskByte(routeMask)]);
+}
+
+export const DEVICE_SLOT_IMAGE_LENGTH = 0x0290;
+export const DEVICE_SLOT_WRITE_CHUNK = 0x003c;
+export type DeviceStoreChain = readonly [number, number, number];
+
+function imageChecksum8(image: Uint8Array): number {
+  let sum = 0;
+  for (const value of image) sum = (sum + value) & 0xff;
+  return (-sum) & 0xff;
+}
+
+function assertSlotImage(image: Uint8Array) {
+  if (image.length !== DEVICE_SLOT_IMAGE_LENGTH) {
+    throw new Error(`Device slot image must be ${DEVICE_SLOT_IMAGE_LENGTH} bytes; got ${image.length}`);
+  }
+}
+
+/** Native permanent-store begin (CMD 0x41). */
+export function buildStoreBegin(image: Uint8Array, chain: DeviceStoreChain = [0x00, 0x00, 0x00]): Uint8Array {
+  assertSlotImage(image);
+  return buildFrame([
+    0x08, 0x41, 0x90, 0x02, imageChecksum8(image), 0x00,
+    byte(chain[0]), byte(chain[1]), byte(chain[2]),
+  ]);
+}
+
+/**
+ * Native permanent-store data block (CMD 0x42). The shared frame uses the
+ * native body length includes four reserved zero bytes after the payload,
+ * producing AA 45 00 for 60-byte chunks and AA 41 00 for the final 56-byte
+ * chunk exactly as captured.
+ */
+export function buildStoreChunk(offset: number, data: Uint8Array): Uint8Array {
+  if (data.length < 1 || data.length > DEVICE_SLOT_WRITE_CHUNK) throw new Error(`Invalid store chunk length: ${data.length}`);
+  const [ol, oh] = u16le(offset);
+  const [ll, lh] = u16le(data.length);
+  const bodyLength = 1 + 2 + 2 + data.length + 4;
+  return buildFrame([bodyLength, 0x42, ol, oh, ll, lh, ...data, 0x00, 0x00, 0x00, 0x00]);
+}
+
+/** Native permanent-store commit (CMD 0x43). */
+export function buildStoreCommit(slotOneBased: number, image: Uint8Array): Uint8Array {
+  assertSlotImage(image);
+  const slotZeroBased = byte(clamp(Math.round(Number(slotOneBased) || 1), 1, 10) - 1);
+  const finalLength = DEVICE_SLOT_IMAGE_LENGTH % DEVICE_SLOT_WRITE_CHUNK || DEVICE_SLOT_WRITE_CHUNK;
+  const finalOffset = DEVICE_SLOT_IMAGE_LENGTH - finalLength;
+  return buildFrame([
+    0x07, 0x43, slotZeroBased, 0x00, finalLength & 0xff, (finalLength >> 8) & 0xff,
+    image[finalOffset], image[finalOffset + 1],
+  ]);
+}
+
 export function buildMute(mute: boolean): Uint8Array {
   return buildFrame([0x03, 0x15, mute ? 0x01 : 0x00, 0x00]);
 }
@@ -98,19 +188,56 @@ export function buildEqWrite(eqKey: string, bandIndexZeroBased: number, band: Pi
 
 export type CrossoverLiveKind = "hpf" | "lpf";
 
-const CROSSOVER_LIVE_PARAM: Record<CrossoverLiveKind, number> = Object.freeze({
-  hpf: 0x02,
-  lpf: 0x03,
+type CrossoverCommandSpec = Readonly<Record<CrossoverLiveKind, number>>;
+
+/**
+ * CMD 0x11 does not use the PEQ section id. The first payload byte after the
+ * command is a dedicated filter selector which encodes both section + HP/LP.
+ *
+ * Directly verified from native-app USB sniffs:
+ *   Music HPF 0x02, Music LPF 0x03
+ *   Main LPF 0x05
+ *   Surround LPF 0x09
+ *   Center LPF 0x0D
+ *   Sub LPF 0x0F
+ *
+ * The paired HP selectors are the adjacent even selector used by the native
+ * protocol's section pair. Reverb/Echo/Mic follow the same contiguous native
+ * selector table. Keeping this table separate from EQ_SECTION_ID prevents the
+ * old bug where Main/Surround/Center/Sub sent PEQ section ids as filter types.
+ */
+export const CROSSOVER_SELECTOR: Readonly<Record<string, CrossoverCommandSpec>> = Object.freeze({
+  mic: Object.freeze({ hpf: 0x00, lpf: 0x01 }),
+  micA: Object.freeze({ hpf: 0x00, lpf: 0x01 }),
+  micB: Object.freeze({ hpf: 0x00, lpf: 0x01 }),
+  music: Object.freeze({ hpf: 0x02, lpf: 0x03 }),
+  main: Object.freeze({ hpf: 0x04, lpf: 0x05 }),
+  reverb: Object.freeze({ hpf: 0x06, lpf: 0x07 }),
+  surround: Object.freeze({ hpf: 0x08, lpf: 0x09 }),
+  echo: Object.freeze({ hpf: 0x0a, lpf: 0x0b }),
+  center: Object.freeze({ hpf: 0x0c, lpf: 0x0d }),
+  sub: Object.freeze({ hpf: 0x0e, lpf: 0x0f }),
+});
+
+const FILTER_TYPE_CODE_BY_LABEL: Readonly<Record<string, number>> = Object.freeze({
+  "LP Bessel 12": 0x01,
+  "HP Bessel 12": 0x01,
+  "LP Butter 12": 0x02,
+  "HP Butter 12": 0x02,
+  "LP Butter 24": 0x06,
+  "HP Butter 24": 0x06,
+  "LP LR 24": 0x07,
+  "HP LR 24": 0x07,
 });
 
 // Native-app USB sniffs supplied 06/07.07.2026 prove HPF/LPF frequency is
 // NOT a top/music/output block write. It is a compact CMD 0x11 write.
 //
 // BT frame body is 6 bytes:
-//   AA 06 11 [02=HPF|03=LPF] [section] [freq u16 LE] [mode] CS
+//   AA 06 11 [section+kind selector] [filter type] [freq u16 LE] [slot] CS
 //
 // USB HID is produced from that BT frame by toUsbFrame():
-//   AA 06 00 11 [02=HPF|03=LPF] [section] [freq u16 LE] [mode] CS
+//   AA 06 00 11 [section+kind selector] [filter type] [freq u16 LE] [slot] CS
 //
 // Critical bug fixed in v0.8.22: the previous implementation returned
 // buildFrame([0x11, ...]) without the BT length byte. On USB this was
@@ -118,21 +245,49 @@ const CROSSOVER_LIVE_PARAM: Record<CrossoverLiveKind, number> = Object.freeze({
 // payload byte, exactly matching the broken appclone sniff and capable of
 // corrupting/muting live device state.
 //
-// The last payload byte is not a fixed filter-type constant. The older Music
-// HPF/LPF native sniff used 0x04, while the latest Native_App_HPF sniff uses
-// 0x09. This matches the active Equipment Mode / preset slot byte, so live
-// crossover writes must use preset.system.deviceModeIndex rather than a
-// hardcoded 0x04.
-function crossoverModeByte(modeIndex?: number): number {
-  return byte(clamp(Number(modeIndex) || 4, 1, 10));
+// The byte immediately after the selector is the filter type code (01 Bessel
+// 12, 02 Butter 12, 06 Butter 24, 07 LR24). This is why the native Main LPF
+// frame is `... 05 02 ...`, Surround is `... 09 01 ...`, and Sub is
+// `... 0F 06 ...`.
+//
+// The final payload byte is section-specific. Music captures track the active
+// Equipment Mode / preset slot (0x04 and 0x09 were observed). Every verified
+// Main/Surround/Center/Sub LPF capture uses 0x00, so output/FX/Mic writes must
+// keep this byte zero instead of leaking the Music slot into another section.
+function crossoverTailByte(eqKey: string, modeIndex?: number): number {
+  if (eqKey !== "music") return 0x00;
+  const n = Number(modeIndex);
+  return byte(clamp(Number.isFinite(n) ? n : 4, 0, 10));
 }
 
-export function buildCrossoverWrite(eqKey: string, kind: CrossoverLiveKind, hz: number, modeIndex?: number): Uint8Array {
-  const section = EQ_SECTION_ID[eqKey];
-  if (section === undefined) throw new Error(`Unsupported crossover live section: ${eqKey}`);
-  const param = CROSSOVER_LIVE_PARAM[kind];
-  const [fl, fh] = u16le(clamp(hz, 20, 20000));
-  return buildFrame([0x06, 0x11, param, section, fl, fh, crossoverModeByte(modeIndex)]);
+function crossoverTypeByte(crossover: EqCrossover | undefined, kind: CrossoverLiveKind): number {
+  if (!crossover) return 0x02;
+  const label = kind === "hpf" ? crossover.hpType : crossover.lpType;
+  const fromLabel = FILTER_TYPE_CODE_BY_LABEL[String(label)];
+  if (fromLabel !== undefined) return fromLabel;
+  const raw = kind === "hpf" ? crossover.hpTypeRaw : crossover.lpTypeRaw;
+  const lowByte = Number(raw) & 0xff;
+  return lowByte || 0x02;
+}
+
+export function supportsCrossoverWrite(eqKey: string): boolean {
+  return CROSSOVER_SELECTOR[eqKey] !== undefined;
+}
+
+export function buildCrossoverWrite(
+  eqKey: string,
+  kind: CrossoverLiveKind,
+  hz: number,
+  crossover?: EqCrossover,
+  modeIndex?: number,
+): Uint8Array {
+  const spec = CROSSOVER_SELECTOR[eqKey];
+  if (!spec) throw new Error(`Unsupported crossover live section: ${eqKey}`);
+  const selector = spec[kind];
+  const typeCode = crossoverTypeByte(crossover, kind);
+  const safeHz = clampFilterHz(eqKey, kind, hz);
+  const [fl, fh] = u16le(safeHz);
+  return buildFrame([0x06, 0x11, selector, typeCode, fl, fh, crossoverTailByte(eqKey, modeIndex)]);
 }
 
 

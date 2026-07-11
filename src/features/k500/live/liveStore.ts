@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { EqBand, Preset } from "@/features/k500/types";
-import { EQ_SECTION_ID, buildCrossoverWrite, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock } from "@/features/k500/protocol/commands";
+import type { EqBand, EqCrossover, Preset } from "@/features/k500/types";
+import { DEVICE_ROUTE_BT, DEVICE_ROUTE_USB, DEVICE_SLOT_IMAGE_LENGTH, DEVICE_SLOT_WRITE_CHUNK, EQ_SECTION_ID, buildCrossoverWrite, buildEqWrite, buildHeartbeat, buildHandshake, buildMicEqLink, buildMute, buildOutputBlock, buildReadBlock, buildRecallHandshake, buildRecallMode, buildStoreBegin, buildStoreChunk, buildStoreCommit, buildTopEffectBlock, buildTopMicBlock, buildTopMusicBlock, buildUseInitVolume, supportsCrossoverWrite, type DeviceStoreChain } from "@/features/k500/protocol/commands";
+import { buildDeviceSlotImage } from "@/features/k500/live/liveMemory";
 import { frameLabel, hex } from "@/features/k500/protocol/frame";
 
 type LiveStatus = "unsupported" | "disconnected" | "connecting" | "connected" | "error";
@@ -22,12 +23,20 @@ interface K500LiveState {
   lastTx: string;
   portLabel: string;
   transportMode: "bt" | "usb";
+  useInitVolume: boolean;
+  recallBusy: boolean;
+  storeBusy: boolean;
+  storeProgress: string;
   log: LiveLogLine[];
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   setTransportMode: (mode: "bt" | "usb") => void;
   hydrateTransportMode: () => void;
   setLiveEnabled: (enabled: boolean) => void;
+  setUseInitVolume: (enabled: boolean) => Promise<void>;
+  recallMode: (slotOneBased: number) => Promise<void>;
+  savePresetToSlot: (slotOneBased: number, preset: Preset) => Promise<void>;
+  massUploadSlots: (slots: Array<{ slotOneBased: number; preset: Preset }>) => Promise<void>;
   sendHeartbeat: () => Promise<void>;
   sendHandshake: () => Promise<void>;
   toggleMute: () => Promise<void>;
@@ -67,8 +76,16 @@ let lastLiveSkipLogAt = 0;
 
 function isLiveWriteAllowed(set: any, get: any, label: string): boolean {
   if (get().status !== "connected") return false;
-  if (get().liveEnabled) return true;
   const now = Date.now();
+  if (get().recallBusy || get().storeBusy) {
+    if (now - lastLiveSkipLogAt > LIVE_SKIP_LOG_INTERVAL_MS) {
+      lastLiveSkipLogAt = now;
+      const reason = get().storeBusy ? "Save/Mass Upload" : "Recall + refresh memory";
+      appendLog(set, get, { dir: "SYS", label: "live edit paused", data: `${label} ditahan selama ${reason}` });
+    }
+    return false;
+  }
+  if (get().liveEnabled) return true;
   if (now - lastLiveSkipLogAt > LIVE_SKIP_LOG_INTERVAL_MS) {
     lastLiveSkipLogAt = now;
     appendLog(set, get, { dir: "SYS", label: "live edit paused", data: `${label} tidak dikirim karena LIVE OFF` });
@@ -201,6 +218,12 @@ function saveTransportMode(mode: "bt" | "usb") {
   try {
     if (typeof window !== "undefined") window.localStorage.setItem(TRANSPORT_STORAGE_KEY, mode);
   } catch {}
+}
+
+function recallRouteMask(): number {
+  // Native Save/Mass Upload and Mode 1 Recall captures use destination mask
+  // 0x03. This is a device-side destination mask, not the physical PC cable.
+  return DEVICE_ROUTE_USB | DEVICE_ROUTE_BT;
 }
 
 interface K500Response {
@@ -339,38 +362,57 @@ function startHeartbeatLoop(set: any, get: any) {
   }, HEARTBEAT_INTERVAL_MS);
 }
 
-async function importLiveMemoryIntoStudio(memory: Uint8Array) {
+async function importLiveMemoryIntoStudio(memory: Uint8Array, activeModeIndex?: number) {
   const { useStudio } = await import("@/features/k500/store");
   const copy = new Uint8Array(memory);
   await useStudio.getState().importLiveMemory(copy.buffer, "K500 DEVICE LIVE");
+
+  // The C0 response after Recall reports the active slot directly. Preserve that
+  // authoritative slot instead of relying only on name matching in live memory.
+  if (activeModeIndex && activeModeIndex >= 1 && activeModeIndex <= 10) {
+    const current = useStudio.getState().preset;
+    if (current) {
+      const next = structuredClone(current);
+      next.system.deviceModeIndex = activeModeIndex;
+      useStudio.setState({ preset: next });
+    }
+  }
+}
+
+async function readActiveDeviceMemory(set: any, get: any, activeModeIndex?: number, reason = "sync") {
+  const total = 0x03ab; // native readback: 0x0000..0x03AA
+  const block = 0x3a;
+  const memory = new Uint8Array(total);
+
+  for (let offset = 0; offset < total; offset += block) {
+    const len = Math.min(block, total - offset);
+    const resp = await requestResponse(
+      buildReadBlock(offset, len),
+      `Read 0x${offset.toString(16).padStart(4, "0")} len ${len}`,
+      0xbf,
+      set,
+      get,
+      2500,
+    );
+    if (!resp.checksumOk) throw new Error(`Bad checksum while reading device at 0x${offset.toString(16)}`);
+    memory.set(resp.data.slice(0, len), offset);
+    await sleep(35);
+  }
+
+  deviceScalarCache = new Uint8Array(memory.slice(0, 0x40));
+  deviceScalarCacheAt = Date.now();
+  await importLiveMemoryIntoStudio(memory, activeModeIndex);
+  set({ lastError: null });
+  appendLog(set, get, { dir: "SYS", label: `${reason} complete`, data: `${memory.length} bytes loaded into editor${activeModeIndex ? ` · active slot ${activeModeIndex}` : ""}` });
 }
 
 async function syncFromDevice(set: any, get: any) {
   appendLog(set, get, { dir: "SYS", label: "sync from device", data: "heartbeat + handshake + read active memory" });
   try {
-    // Match the original Professional Audio System connect sequence:
-    // 1) AA 01 1C E3 heartbeat/status
-    // 2) AA 01 3F C0 handshake
-    // 3) sequential 0x40 read blocks with mode byte 0x63
+    // Match the original Professional Audio System connect sequence.
     await requestResponse(buildHeartbeat(), "Initial status 0x1C", 0xe3, set, get, 2500);
     await requestResponse(buildHandshake(), "Handshake 0x3F", 0xc0, set, get, 2500);
-
-    const total = 0x03ab; // confirmed connect readback: 0x0000..0x03aa
-    const block = 0x3a;
-    const memory = new Uint8Array(total);
-
-    for (let offset = 0; offset < total; offset += block) {
-      const len = Math.min(block, total - offset);
-      const resp = await requestResponse(buildReadBlock(offset, len), `Read 0x${offset.toString(16).padStart(4, "0")} len ${len}`, 0xbf, set, get, 2500);
-      memory.set(resp.data.slice(0, len), offset);
-      await sleep(35);
-    }
-
-    deviceScalarCache = new Uint8Array(memory.slice(0, 0x40));
-    deviceScalarCacheAt = Date.now();
-    await importLiveMemoryIntoStudio(memory);
-    set({ lastError: null });
-    appendLog(set, get, { dir: "SYS", label: "sync complete", data: `${memory.length} bytes loaded into editor` });
+    await readActiveDeviceMemory(set, get);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     set({ lastError: message });
@@ -388,7 +430,7 @@ function outputPathToSection(path: string): "main" | "surround" | "center" | "su
   return null;
 }
 
-type CrossoverLiveWrite = { eqKey: string; kind: "hpf" | "lpf"; hz: number };
+type CrossoverLiveWrite = { eqKey: string; kind: "hpf" | "lpf"; hz: number; crossover?: EqCrossover };
 
 function crossoverPathToWrites(path: string, preset: Preset): CrossoverLiveWrite[] | null {
   const eqMatch = /^eq\.([^.]+)\.crossover\.(hpfHz|lpfHz)$/.exec(path);
@@ -397,34 +439,33 @@ function crossoverPathToWrites(path: string, preset: Preset): CrossoverLiveWrite
     const field = eqMatch[2] as "hpfHz" | "lpfHz";
     const section = preset.eq[eqKey];
     if (!section) return null;
-    return [{ eqKey, kind: field === "hpfHz" ? "hpf" : "lpf", hz: section.crossover[field] }];
+    return [{ eqKey, kind: field === "hpfHz" ? "hpf" : "lpf", hz: section.crossover[field], crossover: section.crossover }];
   }
 
   if (path === "mic.hpfHz" || path === "mic.lpfHz") {
     const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
     const hz = kind === "hpf" ? preset.mic.hpfHz : preset.mic.lpfHz;
-    // The Mic page exposes one shared HPF/LPF value, while the verified EQ live
-    // section map has Mic A=0x00 and Mic B=0x01. Write both sides so the shared
-    // UI value cannot leave one mic path stale.
-    return ["micA", "micB"].map((eqKey) => ({ eqKey, kind, hz }));
+    // Native CMD 0x11 uses one shared Mic filter selector pair (00/01), not
+    // separate PEQ section ids for Mic A and Mic B.
+    return [{ eqKey: "mic", kind, hz, crossover: preset.eq.micA?.crossover }];
   }
 
   if (path === "outputs.sub.hpfHz" || path === "outputs.sub.lpfHz") {
     const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
     const hz = kind === "hpf" ? preset.outputs.sub.hpfHz : preset.outputs.sub.lpfHz;
-    return [{ eqKey: "sub", kind, hz }];
+    return [{ eqKey: "sub", kind, hz, crossover: preset.eq.sub?.crossover }];
   }
 
   if (path === "effects.reverb.hpfHz" || path === "effects.reverb.lpfHz") {
     const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
     const hz = kind === "hpf" ? preset.effects.reverb.hpfHz : preset.effects.reverb.lpfHz;
-    return [{ eqKey: "reverb", kind, hz }];
+    return [{ eqKey: "reverb", kind, hz, crossover: preset.eq.reverb?.crossover }];
   }
 
   if (path === "effects.echo.hpfHz" || path === "effects.echo.lpfHz") {
     const kind = path.endsWith("hpfHz") ? "hpf" : "lpf";
     const hz = kind === "hpf" ? preset.effects.echo.hpfHz : preset.effects.echo.lpfHz;
-    return [{ eqKey: "echo", kind, hz }];
+    return [{ eqKey: "echo", kind, hz, crossover: preset.eq.echo?.crossover }];
   }
 
   return null;
@@ -772,6 +813,86 @@ async function smartPermissionFallback(set: any, get: any, preferred: ConnectedT
   throw new Error("Tidak ada transport BT/USB yang berhasil connect ke K500.");
 }
 
+
+function clearPendingLiveWrites() {
+  if (eqFlushTimer !== null) window.clearTimeout(eqFlushTimer);
+  if (blockFlushTimer !== null) window.clearTimeout(blockFlushTimer);
+  eqFlushTimer = null;
+  blockFlushTimer = null;
+  pendingEqWrites.clear();
+  pendingBlockWrites.clear();
+}
+
+function assertPermanentStoreReady(get: any) {
+  if (get().status !== "connected") throw new Error("Device belum connected.");
+  if (get().transportMode !== "usb") {
+    throw new Error("Save permanen dan Mass Upload hanya diaktifkan melalui USB HID karena sniff native tersedia dari USB.");
+  }
+}
+
+async function writePresetSlot(
+  slotOneBased: number,
+  preset: Preset,
+  chain: DeviceStoreChain,
+  set: any,
+  get: any,
+  waitForBeginAck = true,
+): Promise<DeviceStoreChain> {
+  const slot = Math.max(1, Math.min(10, Math.round(Number(slotOneBased) || 1)));
+  const image = buildDeviceSlotImage(preset);
+  if (image.length !== DEVICE_SLOT_IMAGE_LENGTH) throw new Error(`Slot ${slot}: image length invalid.`);
+
+  const beginFrame = buildStoreBegin(image, chain);
+  if (waitForBeginAck) {
+    const beginAck = await requestResponse(
+      beginFrame,
+      `Store begin slot ${slot} · ${DEVICE_SLOT_IMAGE_LENGTH} bytes`,
+      0xbe,
+      set,
+      get,
+      3500,
+    );
+    if (!beginAck.checksumOk) throw new Error(`Slot ${slot}: begin ACK checksum invalid.`);
+  } else {
+    // Native single-slot Save sends CMD 0x41 and proceeds directly to the 11
+    // block ACKs; only Mass Upload captures return 0xBE for each begin.
+    await writeRaw(beginFrame, `Store begin slot ${slot} · ${DEVICE_SLOT_IMAGE_LENGTH} bytes`, set, get);
+    await sleep(80);
+  }
+
+  let blockIndex = 0;
+  const totalBlocks = Math.ceil(DEVICE_SLOT_IMAGE_LENGTH / DEVICE_SLOT_WRITE_CHUNK);
+  for (let offset = 0; offset < DEVICE_SLOT_IMAGE_LENGTH; offset += DEVICE_SLOT_WRITE_CHUNK) {
+    const data = image.slice(offset, Math.min(DEVICE_SLOT_IMAGE_LENGTH, offset + DEVICE_SLOT_WRITE_CHUNK));
+    blockIndex += 1;
+    set({ storeProgress: `Slot ${slot} · block ${blockIndex}/${totalBlocks}` });
+    const blockAck = await requestResponse(
+      buildStoreChunk(offset, data),
+      `Store slot ${slot} · 0x${offset.toString(16).padStart(4, "0")} · ${data.length} bytes`,
+      0xbd,
+      set,
+      get,
+      3500,
+    );
+    if (!blockAck.checksumOk) throw new Error(`Slot ${slot}: block 0x${offset.toString(16)} ACK checksum invalid.`);
+  }
+
+  const commit = buildStoreCommit(slot, image);
+  const commitAck = await requestResponse(
+    commit,
+    `Store commit slot ${slot}`,
+    0xbc,
+    set,
+    get,
+    3500,
+  );
+  if (!commitAck.checksumOk) throw new Error(`Slot ${slot}: commit ACK checksum invalid.`);
+
+  const finalLength = DEVICE_SLOT_IMAGE_LENGTH % DEVICE_SLOT_WRITE_CHUNK || DEVICE_SLOT_WRITE_CHUNK;
+  const finalOffset = DEVICE_SLOT_IMAGE_LENGTH - finalLength;
+  return [image[finalOffset], image[finalOffset + 1], commit[commit.length - 1]];
+}
+
 export const useK500Live = create<K500LiveState>((set, get) => ({
   status: "disconnected",
   liveEnabled: false,
@@ -784,6 +905,10 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
   // restored by hydrateTransportMode() after React mounts, avoiding the stale
   // BT/USB segmented-control state that required clicking BT before USB.
   transportMode: "bt",
+  useInitVolume: false,
+  recallBusy: false,
+  storeBusy: false,
+  storeProgress: "",
   log: [],
 
   setTransportMode: (mode) => {
@@ -861,6 +986,141 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
     appendLog(set, get, { dir: "SYS", label: enabled ? "LIVE EDIT ON" : "LIVE EDIT OFF" });
   },
 
+  setUseInitVolume: async (enabled) => {
+    const previous = get().useInitVolume;
+    const mask = recallRouteMask();
+    if (get().status !== "connected") {
+      const message = "Device belum connected; Use init vol tidak dikirim.";
+      set({ lastError: message });
+      appendLog(set, get, { dir: "ERR", label: "Use init vol blocked", data: message });
+      return;
+    }
+
+    set({ useInitVolume: enabled, lastError: null });
+    try {
+      const ack = await requestResponse(
+        buildUseInitVolume(enabled, mask),
+        `Use init vol ${enabled ? "ON" : "OFF"} · mask 0x${mask.toString(16).padStart(2, "0")}`,
+        0xed,
+        set,
+        get,
+        2200,
+      );
+      if (!ack.checksumOk) throw new Error("Use init vol ACK checksum invalid");
+      set({ lastError: null });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ useInitVolume: previous, lastError: message });
+      appendLog(set, get, { dir: "ERR", label: "Use init vol failed", data: message });
+    }
+  },
+
+  recallMode: async (slotOneBased) => {
+    if (get().status !== "connected") {
+      const message = "Device belum connected.";
+      set({ lastError: message });
+      appendLog(set, get, { dir: "ERR", label: "Recall blocked", data: message });
+      return;
+    }
+    const slot = Math.max(1, Math.min(10, Math.round(Number(slotOneBased) || 1)));
+    const mask = recallRouteMask();
+    set({ recallBusy: true, lastError: null });
+    try {
+      // Never let a stale fader/PEQ drag flush after the device has changed slot.
+      if (eqFlushTimer !== null) window.clearTimeout(eqFlushTimer);
+      if (blockFlushTimer !== null) window.clearTimeout(blockFlushTimer);
+      eqFlushTimer = null;
+      blockFlushTimer = null;
+      pendingEqWrites.clear();
+      pendingBlockWrites.clear();
+
+      await writeRaw(
+        buildRecallMode(slot, mask),
+        `Recall slot ${slot} · mask 0x${mask.toString(16).padStart(2, "0")}`,
+        set,
+        get,
+      );
+      await sleep(80);
+
+      const hello = await requestResponse(
+        buildRecallHandshake(mask),
+        `Recall refresh handshake · mask 0x${mask.toString(16).padStart(2, "0")}`,
+        0xc0,
+        set,
+        get,
+        3000,
+      );
+      if (!hello.checksumOk) throw new Error("Recall handshake checksum invalid");
+      const activeSlot = Math.max(1, Math.min(10, Number(hello.data[0] ?? (slot - 1)) + 1));
+      await readActiveDeviceMemory(set, get, activeSlot, `recall slot ${activeSlot}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ lastError: message });
+      appendLog(set, get, { dir: "ERR", label: `Recall slot ${slot} failed`, data: message });
+    } finally {
+      set({ recallBusy: false });
+    }
+  },
+
+  savePresetToSlot: async (slotOneBased, preset) => {
+    try {
+      assertPermanentStoreReady(get);
+      if (get().storeBusy || get().recallBusy) throw new Error("Device sedang menjalankan operasi slot lain.");
+      clearPendingLiveWrites();
+      if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      const slot = Math.max(1, Math.min(10, Math.round(Number(slotOneBased) || 1)));
+      set({ storeBusy: true, storeProgress: `Preparing slot ${slot}`, lastError: null });
+      await writePresetSlot(slot, preset, [0x00, 0x00, 0x00], set, get, false);
+      set({ storeProgress: `Slot ${slot} saved`, lastError: null });
+      appendLog(set, get, { dir: "SYS", label: `Save slot ${slot} complete`, data: `${DEVICE_SLOT_IMAGE_LENGTH} bytes committed permanently` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ lastError: message, storeProgress: "Save failed" });
+      appendLog(set, get, { dir: "ERR", label: "Save slot failed", data: message });
+    } finally {
+      set({ storeBusy: false });
+      if (get().status === "connected") startHeartbeatLoop(set, get);
+    }
+  },
+
+  massUploadSlots: async (slots) => {
+    try {
+      assertPermanentStoreReady(get);
+      if (get().storeBusy || get().recallBusy) throw new Error("Device sedang menjalankan operasi slot lain.");
+      const normalized = slots
+        .map((item) => ({ slotOneBased: Math.max(1, Math.min(10, Math.round(Number(item.slotOneBased) || 1))), preset: item.preset }))
+        .filter((item, index, all) => all.findIndex((candidate) => candidate.slotOneBased === item.slotOneBased) === index)
+        .sort((a, b) => b.slotOneBased - a.slotOneBased);
+      if (!normalized.length) throw new Error("Tidak ada preset PC untuk Mass Upload.");
+      if (normalized.length > 10) throw new Error("Mass Upload maksimum 10 preset.");
+
+      clearPendingLiveWrites();
+      if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      set({ storeBusy: true, storeProgress: `Mass upload · ${normalized.length} slot`, lastError: null });
+
+      let chain: DeviceStoreChain = [0x00, 0x00, 0x00];
+      let completed = 0;
+      for (const item of normalized) {
+        set({ storeProgress: `Mass upload ${completed + 1}/${normalized.length} · slot ${item.slotOneBased}` });
+        chain = await writePresetSlot(item.slotOneBased, item.preset, chain, set, get);
+        completed += 1;
+      }
+      set({ storeBusy: false, storeProgress: `${completed} slot uploaded · refreshing slot 1` });
+      appendLog(set, get, { dir: "SYS", label: "Mass upload committed", data: `${completed} slot · native order ${normalized.map((item) => item.slotOneBased).join("→")}` });
+      await get().recallMode(1);
+      set({ storeProgress: `${completed} slot uploaded`, lastError: null });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ lastError: message, storeProgress: "Mass upload failed" });
+      appendLog(set, get, { dir: "ERR", label: "Mass upload failed", data: message });
+    } finally {
+      set({ storeBusy: false });
+      if (get().status === "connected") startHeartbeatLoop(set, get);
+    }
+  },
+
   sendHeartbeat: async () => sendHeartbeatKeepAlive(set, get, "Manual heartbeat 0x1C"),
   sendHandshake: async () => enqueueWrite(buildHandshake(), "Handshake 0x3F", set, get),
 
@@ -891,7 +1151,7 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
       const crossoverWrites = crossoverPathToWrites(path, preset);
       if (crossoverWrites) {
         for (const write of crossoverWrites) {
-          if (EQ_SECTION_ID[write.eqKey] === undefined) {
+          if (!supportsCrossoverWrite(write.eqKey)) {
             if (!notedUnsupportedCrossoverSections.has(write.eqKey)) {
               notedUnsupportedCrossoverSections.add(write.eqKey);
               appendLog(set, get, { dir: "SYS", label: `Crossover ${write.eqKey} file-only`, data: "section ini belum punya command crossover live terverifikasi — edit tersimpan di preset, tidak dikirim ke device" });
@@ -900,7 +1160,7 @@ export const useK500Live = create<K500LiveState>((set, get) => ({
           }
           queueLiveBlockWrite(
             `xover:${write.eqKey}:${write.kind}`,
-            buildCrossoverWrite(write.eqKey, write.kind, write.hz, preset.system.deviceModeIndex),
+            buildCrossoverWrite(write.eqKey, write.kind, write.hz, write.crossover, preset.system.deviceModeIndex),
             `Crossover ${write.eqKey} ${write.kind.toUpperCase()} · ${Math.round(write.hz)}Hz`,
             set,
             get,
@@ -984,12 +1244,16 @@ async function writeRaw(frame: Uint8Array, label: string, set: any, get: any): P
     // USB HID transport: re-frame for USB (16-bit length) and pad to the
     // 64-byte interrupt report, exactly as in the native-app USB sniff.
     const usbFrame = toUsbFrame(frame);
-    const payload = new Uint8Array(Math.max(HID_REPORT_SIZE, usbFrame.length));
-    payload.set(usbFrame, 0);
     const uh = hex(usbFrame);
     set({ lastTx: uh });
     appendLog(set, get, { dir: "TX", label: `${label} · USB`, data: uh });
-    await hidDevice.sendReport(HID_REPORT_ID, payload);
+    // CMD 0x42 is 69 bytes on USB and must be sent as two consecutive
+    // 64-byte HID reports (64 + 5), exactly as the native USBPcap trace.
+    for (let offset = 0; offset < usbFrame.length; offset += HID_REPORT_SIZE) {
+      const payload = new Uint8Array(HID_REPORT_SIZE);
+      payload.set(usbFrame.slice(offset, offset + HID_REPORT_SIZE), 0);
+      await hidDevice.sendReport(HID_REPORT_ID, payload);
+    }
     return;
   }
   if (!writer) throw new Error("Serial writer not available (port closed?)");

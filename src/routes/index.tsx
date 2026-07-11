@@ -4,9 +4,9 @@ import { StudioShell } from "@/components/studio/StudioShell";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "K500 Preset Studio — Karaoke Processor Console" },
+      { title: "SONKUPIK STUDIO — Karaoke Processor" },
       { name: "description", content: "DAW-grade editor for KTV K500 karaoke processor presets — EQ, dynamics, routing, checksum-safe export." },
-      { property: "og:title", content: "K500 Preset Studio" },
+      { property: "og:title", content: "SONKUPIK STUDIO" },
       { property: "og:description", content: "DAW-grade editor for KTV K500 karaoke processor presets." },
     ],
   }),

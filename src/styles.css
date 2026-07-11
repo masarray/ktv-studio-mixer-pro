@@ -1169,3 +1169,375 @@ html, body, #app { height: 100%; overflow: hidden; }
     font-size: 9.4px !important;
   }
 }
+
+/* K500 v0.8.25 — PEQ-first responsive workspace.
+   Dynamic mixer/dynamics panels own the remaining width. Crossover panels and
+   the master rail are allowed to contract; contextual preset/inspector cards
+   disappear before the PEQ canvas or dynamics controls are squeezed. */
+.rack-nav {
+  width: 200px;
+}
+
+.master-rail {
+  width: clamp(220px, 17vw, 300px);
+  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
+}
+
+.responsive-rack-page {
+  min-width: 0;
+}
+
+.mic-page {
+  grid-template-columns: minmax(220px, .72fr) minmax(390px, 1.55fr) clamp(176px, 14vw, 224px);
+}
+
+.music-page {
+  grid-template-columns: minmax(440px, 1.55fr) minmax(240px, .88fr) clamp(210px, 15vw, 250px) !important;
+}
+
+.output-page {
+  grid-template-columns: minmax(330px, 1.18fr) minmax(390px, 1.5fr) clamp(176px, 14vw, 224px);
+}
+
+.effect-page {
+  grid-template-columns: minmax(360px, 1fr) clamp(190px, 16vw, 250px);
+}
+
+.crossover-panel {
+  min-width: 0;
+}
+
+.crossover-panel > div:last-child {
+  padding-inline: clamp(9px, 1vw, 16px);
+}
+
+@media (max-width: 1500px) {
+  .master-rail {
+    width: 226px;
+  }
+
+  /* These are secondary context views. The PEQ canvas and editor controls win. */
+  .master-preset-panel,
+  .master-band-inspector {
+    display: none !important;
+  }
+
+  .master-context-rail {
+    overflow: hidden;
+  }
+
+  .mic-page {
+    grid-template-columns: minmax(200px, .66fr) minmax(350px, 1.5fr) 184px;
+  }
+
+  .music-page {
+    grid-template-columns: minmax(390px, 1.5fr) minmax(225px, .9fr) 218px !important;
+  }
+
+  .output-page {
+    grid-template-columns: minmax(300px, 1.12fr) minmax(350px, 1.5fr) 184px;
+  }
+
+  .effect-page {
+    grid-template-columns: minmax(330px, 1fr) 208px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .rack-nav {
+    width: 176px;
+  }
+
+  .master-rail {
+    width: 176px;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .master-context-rail {
+    display: none !important;
+  }
+
+  .master-bottom-strip {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .master-bottom-strip > header {
+    padding-inline: 10px !important;
+  }
+
+  .master-bottom-strip > div:last-child {
+    padding-inline: 5px !important;
+  }
+
+  .master-bottom-strip .fader-strip {
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
+  }
+
+  .mic-page {
+    grid-template-columns: minmax(188px, .62fr) minmax(330px, 1.5fr) 166px;
+  }
+
+  .music-page {
+    grid-template-columns: minmax(360px, 1.45fr) minmax(214px, .9fr) 202px !important;
+  }
+
+  .output-page {
+    grid-template-columns: minmax(280px, 1.08fr) minmax(330px, 1.5fr) 166px;
+  }
+
+  .effect-page {
+    grid-template-columns: minmax(300px, 1fr) 190px;
+  }
+
+  .crossover-panel .studio-input,
+  .crossover-panel .studio-select {
+    padding-inline: 6px;
+  }
+}
+
+/* K500 v0.8.26 — compact headers + protected System actions. */
+.panel-heading-label {
+  max-width: 100%;
+  color: var(--foreground);
+  font-size: 10px;
+  letter-spacing: .11em;
+  white-space: nowrap;
+}
+
+.system-critical-actions,
+.system-critical-options {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+}
+
+.system-critical-actions {
+  padding-top: 2px;
+  background: linear-gradient(180deg, transparent, oklch(0.06 0.01 250 / 84%) 35%);
+}
+
+.system-critical-options {
+  min-height: 24px;
+  align-items: center;
+}
+
+.system-store-progress {
+  min-width: 0;
+  flex: 1 1 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cyan);
+}
+
+
+/* K500 v0.8.27 — PEQ owns narrow-window width + Sonkupik tape-key control. */
+.rack-nav {
+  width: 170px;
+  min-width: 170px;
+  max-width: 170px;
+}
+
+.pitch-tape-control {
+  margin-bottom: 11px;
+}
+.pitch-tape-shell {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 7px;
+}
+.pitch-tape-arrow {
+  width: 32px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid oklch(0 0 0 / 68%);
+  background:
+    linear-gradient(180deg, oklch(0.35 0.018 250), oklch(0.17 0.014 250)),
+    repeating-linear-gradient(90deg, oklch(1 0 0 / 3%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 14%),
+    inset 0 -1px 0 oklch(0 0 0 / 55%),
+    0 2px 7px oklch(0 0 0 / 42%);
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform .1s ease, filter .1s ease, opacity .1s ease;
+}
+.pitch-tape-arrow:hover:not(:disabled) {
+  filter: brightness(1.18);
+  transform: translateY(-1px);
+}
+.pitch-tape-arrow:active:not(:disabled) { transform: translateY(1px); }
+.pitch-tape-arrow:disabled { opacity: .25; cursor: default; }
+
+.pitch-tape-window {
+  position: relative;
+  height: 42px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid oklch(0.82 0.18 78 / 25%);
+  background:
+    linear-gradient(90deg, oklch(0.045 0.008 250 / 96%), transparent 16%, transparent 84%, oklch(0.045 0.008 250 / 96%)),
+    linear-gradient(180deg, oklch(0.12 0.016 250), oklch(0.055 0.01 250));
+  box-shadow:
+    inset 0 2px 7px oklch(0 0 0 / 78%),
+    inset 0 0 0 1px oklch(1 0 0 / 4%),
+    0 0 16px oklch(0.82 0.18 78 / 8%);
+  outline: none;
+}
+.pitch-tape-window:focus-visible {
+  border-color: oklch(0.85 0.14 200 / 58%);
+  box-shadow: inset 0 2px 7px oklch(0 0 0 / 78%), 0 0 0 1px oklch(0.85 0.14 200 / 30%), 0 0 18px oklch(0.85 0.14 200 / 15%);
+}
+.pitch-tape-window::before,
+.pitch-tape-window::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(0.82 0.18 78 / 28%), transparent);
+  pointer-events: none;
+}
+.pitch-tape-window::before { top: 7px; }
+.pitch-tape-window::after { bottom: 7px; }
+.pitch-tape-strip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  padding-inline: 8px;
+  will-change: transform, opacity;
+}
+.pitch-tape-mark {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: oklch(0.68 0.018 250);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px oklch(0 0 0 / 85%);
+  transition: color .13s ease, transform .13s ease, opacity .13s ease;
+}
+.pitch-tape-mark:not(.active):not(.empty):hover { color: var(--foreground); }
+.pitch-tape-mark.active {
+  color: var(--amber);
+  font-size: 15px;
+  font-weight: 900;
+  transform: scale(1.06);
+  text-shadow: 0 0 8px oklch(0.82 0.18 78 / 58%), 0 0 16px oklch(0.82 0.18 78 / 24%);
+}
+.pitch-tape-mark.empty { opacity: .12; }
+.pitch-tape-center-line {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, var(--cyan), transparent);
+  box-shadow: 0 0 7px oklch(0.85 0.14 200 / 52%);
+  opacity: .6;
+  pointer-events: none;
+}
+.pitch-tape-status {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 39px 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  letter-spacing: .12em;
+}
+.pitch-tape-status span:last-child { text-align: right; }
+.pitch-tape-status strong {
+  color: var(--cyan);
+  font-size: 8px;
+  letter-spacing: .14em;
+  text-shadow: 0 0 8px oklch(0.85 0.14 200 / 36%);
+}
+.pitch-tape-slide-left { animation: pitch-tape-from-left .2s cubic-bezier(.2,.75,.25,1); }
+.pitch-tape-slide-right { animation: pitch-tape-from-right .2s cubic-bezier(.2,.75,.25,1); }
+@keyframes pitch-tape-from-left {
+  from { transform: translateX(-18px); opacity: .45; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes pitch-tape-from-right {
+  from { transform: translateX(18px); opacity: .45; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 1500px) {
+  /* All context-only right panels disappear together, including Sonic Guard. */
+  .master-context-rail,
+  .master-preset-panel,
+  .master-band-inspector,
+  .master-sonic-guard {
+    display: none !important;
+  }
+
+  /* System keeps Master Strip aligned with the lower rack instead of climbing upward. */
+  .studio-workspace-system .master-rail {
+    width: 176px;
+    grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
+  }
+  .studio-workspace-system .master-bottom-strip { grid-row: 2; }
+
+  /* PEQ pages take the full top width. Master occupies only the lower-right rack cell. */
+  .studio-workspace-peq { position: relative; }
+  .studio-workspace-peq .studio-page-content {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .studio-workspace-peq .master-rail {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 24;
+    width: 176px;
+    height: var(--k500-lower-rack-height);
+    min-height: var(--k500-lower-rack-height);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .studio-workspace-peq .master-bottom-strip {
+    grid-row: 1;
+    width: 100%;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  .studio-workspace-peq .rack-row {
+    box-sizing: border-box;
+    padding-right: 188px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .rack-nav {
+    width: 170px;
+    min-width: 170px;
+    max-width: 170px;
+  }
+  .studio-workspace-system .master-rail {
+    width: 164px;
+    grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
+  }
+  .studio-workspace-system .master-bottom-strip { grid-row: 2; }
+  .studio-workspace-peq .master-rail { width: 164px; }
+  .studio-workspace-peq .rack-row { padding-right: 176px; }
+}

@@ -21,9 +21,8 @@ export function Panel({
     <section className={cn("panel-bevel flex flex-col", className)}>
       {(eyebrow || title || right) && (
         <header className="flex items-end justify-between gap-3 px-4 pt-3 pb-2 border-b border-[color:var(--bevel-hi)]">
-          <div className="min-w-0">
-            {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-            {title && <h3 className="font-display text-sm font-semibold text-foreground truncate">{title}</h3>}
+          <div className="eyebrow panel-heading-label" title={title || eyebrow}>
+            {title || eyebrow}
           </div>
           {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
         </header>

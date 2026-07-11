@@ -17,7 +17,7 @@ export function MasterSection() {
 
   if (!preset) {
     return (
-      <aside className="flex flex-col gap-3 w-[320px] shrink-0 min-h-0 overflow-hidden">
+      <aside className="master-rail flex flex-col gap-3 shrink-0 min-h-0 overflow-hidden">
         <Panel eyebrow="Master" title="Idle">
           <p className="text-xs text-muted-foreground">Load a preset to wake the console.</p>
         </Panel>
@@ -37,11 +37,11 @@ export function MasterSection() {
   );
 
   return (
-    <aside className="grid grid-rows-[minmax(0,1fr)_304px] gap-3 w-[300px] shrink-0 relative min-h-0 overflow-hidden">
+    <aside className="master-rail grid gap-3 shrink-0 relative min-h-0 overflow-hidden">
       <div className="absolute -left-1.5 top-2 bottom-2 w-px bg-linear-to-b from-transparent via-[color:var(--gold)] to-transparent opacity-40" />
 
-      <div className="right-rail-scroll flex flex-col gap-2.5 min-h-0 overflow-y-auto pr-1">
-        <Panel eyebrow="Preset" title={preset.name}
+      <div className="master-context-rail right-rail-scroll flex flex-col gap-2.5 min-h-0 overflow-y-auto pr-1">
+        <Panel eyebrow="Preset" title={preset.name} className="master-preset-panel"
           right={
             <div className="flex items-center gap-1.5 text-[10px] font-mono">
               <Led color={preset.checksumOk ? "green" : "red"} />
@@ -65,7 +65,7 @@ export function MasterSection() {
         </Panel>
 
         {band && section && (
-          <Panel eyebrow="Band Inspector" title={`${section.label} · B${band.index}`}>
+          <Panel eyebrow="Band Inspector" title={`${section.label} · B${band.index}`} className="master-band-inspector">
             <div className="flex items-baseline justify-between mb-3">
               <LedReadout value={`${band.gainDb > 0 ? "+" : ""}${band.gainDb.toFixed(1)}`} unit="dB" size="lg" />
               <span className="text-[11px] font-mono text-muted-foreground">{band.type} · {band.frequencyHz}Hz · Q{band.q.toFixed(1)}</span>
@@ -86,7 +86,7 @@ export function MasterSection() {
           </Panel>
         )}
 
-        <Panel eyebrow="Sonic Guard"
+        <Panel eyebrow="Sonic Guard" className="master-sonic-guard"
           title={warnings.length ? `${warnings.length} high-gain bands` : "Safe response"}
           right={<Led color={warnings.length ? "red" : "green"} />}
         >

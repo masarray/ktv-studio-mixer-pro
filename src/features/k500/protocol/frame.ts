@@ -26,7 +26,16 @@ export function verifyK500Frame(frame: Uint8Array): boolean {
   return sum === 0;
 }
 
-const RSP_LABELS: Record<number, string> = { 0xe3: "STATUS", 0xbf: "READ", 0xfd: "WRITE-ACK" };
+const RSP_LABELS: Record<number, string> = {
+  0xe3: "STATUS",
+  0xbf: "READ",
+  0xc0: "HANDSHAKE",
+  0xed: "INIT-VOL-ACK",
+  0xfd: "WRITE-ACK",
+  0xbe: "STORE-BEGIN-ACK",
+  0xbd: "STORE-BLOCK-ACK",
+  0xbc: "STORE-COMMIT-ACK",
+};
 
 export function frameLabel(frame: Uint8Array): string {
   if (frame[0] === 0xaa) return `TX CMD 0x${(frame[2] ?? 0).toString(16).toUpperCase().padStart(2, "0")}`;

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Bluetooth, Cable, Power, Radio, Send, Trash2, Usb, VolumeX } from "lucide-react";
+import { Bluetooth, Cable, Power, Radio, Trash2, Usb, VolumeX } from "lucide-react";
 import { useK500Live } from "@/features/k500/live/liveStore";
 import { cn } from "@/lib/utils";
 import { Led, LedReadout, Panel } from "./primitives";
@@ -10,7 +10,6 @@ export function LiveDevicePill() {
   const connect = useK500Live((s) => s.connect);
   const disconnect = useK500Live((s) => s.disconnect);
   const setLiveEnabled = useK500Live((s) => s.setLiveEnabled);
-  const sendHeartbeat = useK500Live((s) => s.sendHeartbeat);
   const toggleMute = useK500Live((s) => s.toggleMute);
   const mute = useK500Live((s) => s.mute);
   const lastError = useK500Live((s) => s.lastError);
@@ -26,15 +25,26 @@ export function LiveDevicePill() {
   const busy = status === "connecting";
   const unsupported = status === "unsupported";
   const error = status === "error";
+  const liveLedColor = error ? "red" : liveEnabled && connected ? "green" : "amber";
 
   return (
     <div className={cn("panel-inset h-[34px] px-2 flex items-center gap-2 min-w-[470px]", connected && "ring-1 ring-[color:var(--cyan)]/25")}
       title={unsupported ? "Web Serial/WebHID tidak tersedia. Pakai Chrome/Edge di localhost." : lastError || "K500 Smart Connect · scans remembered BT + USB first"}
     >
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Led color={connected ? "green" : error ? "red" : "amber"} on={status !== "disconnected"} />
-        <span className="eyebrow text-[9px]">Live Alpha</span>
-      </div>
+      <button
+        type="button"
+        disabled={!connected}
+        onClick={() => setLiveEnabled(!liveEnabled)}
+        className={cn(
+          "flex items-center gap-1.5 shrink-0 rounded-md px-1.5 py-1 transition-colors",
+          connected ? "hover:bg-white/5" : "cursor-default",
+        )}
+        title={connected ? `Live edit ${liveEnabled ? "aktif" : "pause"} · klik untuk ${liveEnabled ? "pause" : "aktifkan"}` : "Hubungkan device untuk live edit"}
+        aria-pressed={connected && liveEnabled}
+      >
+        <Led color={liveLedColor} on={(connected && liveEnabled) || error} />
+        <span className={cn("eyebrow text-[9px]", connected && liveEnabled && "text-[color:var(--meter-green)]")}>LIVE</span>
+      </button>
 
       {/* Preferred transport. Connect still smart-scans remembered BT + USB before asking permission. */}
       <div className="flex items-center rounded-md border border-border/60 bg-black/30 p-[2px] gap-[2px]" role="tablist" aria-label="Transport">
@@ -71,18 +81,6 @@ export function LiveDevicePill() {
         {busy ? "Scanning" : connected ? "Disconnect" : "Connect"}
       </button>
 
-      <button
-        disabled={!connected}
-        onClick={() => setLiveEnabled(!liveEnabled)}
-        className={cn("chrome-btn px-2 py-1 text-[10px] font-display", connected && liveEnabled && "chrome-btn-active")}
-      >
-        {liveEnabled ? "LIVE ON" : "LIVE OFF"}
-      </button>
-
-      <button disabled={!connected} onClick={sendHeartbeat} className="chrome-btn px-2 py-1 text-[10px] font-display inline-flex items-center gap-1">
-        <Send size={12} /> Ping
-      </button>
-
       <button disabled={!connected} onClick={toggleMute} className={cn("chrome-btn px-2 py-1 text-[10px] font-display inline-flex items-center gap-1", mute && "chrome-btn-active")}> 
         <VolumeX size={12} /> {mute ? "Muted" : "Mute"}
       </button>
@@ -111,7 +109,7 @@ export function LiveDeviceInspector() {
   return (
     <Panel
       eyebrow="Device"
-      title="K500 Live Sync Alpha"
+      title="K500 Live Sync"
       right={<Led color={status === "connected" ? "green" : status === "error" ? "red" : "amber"} />}
       className="shrink-0"
       bodyClassName="p-3"
@@ -137,7 +135,7 @@ export function LiveDeviceInspector() {
         ))}
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground leading-snug">
-        Connect auto-scans remembered ports and identifies the K500 by its heartbeat signature — the chooser only appears once per port (browser security). Live edit writes RAM/current state only; permanent save/upload is disabled.
+        Connect auto-scans remembered ports and identifies the K500 by its heartbeat signature — the chooser only appears once per port (browser security). Live edit writes RAM/current state. Save and Mass Upload use the native verified permanent slot protocol over USB.
       </p>
     </Panel>
   );
