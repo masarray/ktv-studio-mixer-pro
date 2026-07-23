@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 import { useStudio } from "@/features/k500/store";
 import type { PageKey } from "@/features/k500/types";
 import { cn } from "@/lib/utils";
-import sonkupikLogo from "@/assets/sonkupik-logo.png";
 import {
   Mic2, Music2, Speaker, Waves, RadioTower, Activity, Sparkles, Repeat, Settings2,
   Upload, Download, SkipBack, SkipForward, Play, VolumeX,
@@ -13,6 +13,8 @@ import { EqGraph } from "./EqGraph";
 import { MicPage, MusicPage, OutputPage, ReverbPage, EchoPage, SystemPage } from "./pages";
 import { LiveDevicePill } from "./LiveDevicePanel";
 import { useK500Live } from "@/features/k500/live/liveStore";
+
+const sonkupikLogo = "/sonkupik-icon-128.png";
 
 const NAV: { key: PageKey; label: string; desc: string; Icon: any }[] = [
   { key: "music", label: "Music", desc: "Source & tone", Icon: Music2 },
@@ -54,7 +56,8 @@ function PlayerTransportControls() {
 }
 
 function TransportBar() {
-  const preset = useStudio((s) => s.preset);
+  const presetName = useStudio((s) => s.preset?.name ?? "— NO PRESET —");
+  const hasPreset = useStudio((s) => Boolean(s.preset));
   const importBuffer = useStudio((s) => s.importBuffer);
   const exportPreset = useStudio((s) => s.exportPreset);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -76,7 +79,7 @@ function TransportBar() {
 
       <div className="flex items-center gap-2 mx-auto min-w-0">
         <PlayerTransportControls />
-        <LedReadout value={preset ? preset.name : "— NO PRESET —"} size="md" color="amber" className="max-w-[260px] truncate" />
+        <LedReadout value={presetName} size="md" color="amber" className="max-w-[260px] truncate" />
         <LiveDevicePill />
       </div>
 
@@ -96,8 +99,8 @@ function TransportBar() {
         </button>
         <button
           onClick={exportPreset}
-          disabled={!preset}
-          className={cn("chrome-btn px-3 py-1.5 text-xs font-display flex items-center gap-1.5", preset && "chrome-btn-active")}
+          disabled={!hasPreset}
+          className={cn("chrome-btn px-3 py-1.5 text-xs font-display flex items-center gap-1.5", hasPreset && "chrome-btn-active")}
         >
           <Download size={14} /> Export
         </button>
@@ -145,10 +148,10 @@ function EmptyState() {
   return <div className="panel-bevel flex-1 min-h-0" />;
 }
 
-function PageContent() {
+function PageContent({ systemMaster }: { systemMaster?: ReactNode }) {
   const page = useStudio((s) => s.page);
-  const preset = useStudio((s) => s.preset);
-  if (!preset) return <EmptyState />;
+  const hasPreset = useStudio((s) => Boolean(s.preset));
+  if (!hasPreset) return <EmptyState />;
 
   const showEq = page !== "system";
   const PageBody = (() => {
@@ -161,7 +164,7 @@ function PageContent() {
       case "sub": return <OutputPage which="sub" />;
       case "reverb": return <ReverbPage />;
       case "echo": return <EchoPage />;
-      case "system": return <SystemPage />;
+      case "system": return <SystemPage masterSlot={systemMaster} />;
     }
   })();
 
@@ -179,24 +182,25 @@ function PageContent() {
 }
 
 export function StudioShell() {
-  const preset = useStudio((s) => s.preset);
+  const hasPreset = useStudio((s) => Boolean(s.preset));
   const page = useStudio((s) => s.page);
   const importDefaultFlat = useStudio((s) => s.importDefaultFlat);
+  const liveStatus = useK500Live((s) => s.status);
 
   useEffect(() => {
-    if (!preset) void importDefaultFlat();
-  }, [preset, importDefaultFlat]);
+    if (!hasPreset) void importDefaultFlat();
+  }, [hasPreset, importDefaultFlat]);
 
   return (
-    <div className="h-screen w-full p-3 flex flex-col gap-3 overflow-hidden">
+    <div className="studio-shell h-screen w-full p-3 flex flex-col gap-3 overflow-hidden" data-live-status={liveStatus}>
       <TransportBar />
       <div className={cn(
         "studio-workspace flex gap-3 flex-1 min-h-0 overflow-hidden",
         page === "system" ? "studio-workspace-system" : "studio-workspace-peq",
       )}>
         <RackNav />
-        <PageContent />
-        <MasterSection />
+        <PageContent systemMaster={page === "system" ? <MasterSection /> : undefined} />
+        {page !== "system" && <MasterSection />}
       </div>
     </div>
   );

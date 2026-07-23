@@ -35,7 +35,9 @@ function safeStaticPath(clientRoot, pathname) {
 }
 
 function serveStatic(req, res, clientRoot, pathname) {
-  const candidate = safeStaticPath(clientRoot, pathname);
+  const candidate = pathname === "/"
+    ? path.join(clientRoot, "index.html")
+    : safeStaticPath(clientRoot, pathname);
   if (!candidate || !existsSync(candidate)) return false;
   const info = statSync(candidate);
   if (!info.isFile()) return false;
@@ -94,16 +96,27 @@ export async function startAppServer({ appRoot, host = "127.0.0.1", port = 0 } =
   if (!appRoot) throw new Error("appRoot is required");
   const clientRoot = path.join(appRoot, "dist", "client");
   const serverEntryPath = path.join(appRoot, "dist", "server", "server.js");
-  if (!existsSync(clientRoot) || !existsSync(serverEntryPath)) {
+  const prerenderedEntryPath = path.join(clientRoot, "index.html");
+  if (!existsSync(clientRoot) || (!existsSync(prerenderedEntryPath) && !existsSync(serverEntryPath))) {
     throw new Error("Production build is missing. Run npm run build before launching the desktop app.");
   }
 
-  const moduleUrl = pathToFileURL(serverEntryPath).href;
-  const serverEntry = await import(moduleUrl);
-  const fetchHandler = serverEntry.default?.fetch;
-  if (typeof fetchHandler !== "function") {
-    throw new Error("TanStack server entry does not expose a fetch handler.");
-  }
+  // The prerendered desktop shell is the normal path. Keep SSR as a lazy
+  // fallback for unexpected URLs without paying its module-import cost during
+  // every cold launch.
+  let fetchHandlerPromise = null;
+  const getFetchHandler = async () => {
+    if (!fetchHandlerPromise) {
+      fetchHandlerPromise = import(pathToFileURL(serverEntryPath).href).then((serverEntry) => {
+        const handler = serverEntry.default?.fetch;
+        if (typeof handler !== "function") {
+          throw new Error("TanStack server entry does not expose a fetch handler.");
+        }
+        return handler;
+      });
+    }
+    return fetchHandlerPromise;
+  };
 
   let origin = "";
   const sockets = new Set();
@@ -112,6 +125,7 @@ export async function startAppServer({ appRoot, host = "127.0.0.1", port = 0 } =
       const requestUrl = new URL(req.url ?? "/", origin);
       if (serveStatic(req, res, clientRoot, requestUrl.pathname)) return;
       const request = await toFetchRequest(req, origin);
+      const fetchHandler = await getFetchHandler();
       const response = await fetchHandler(request, {}, {});
       await sendFetchResponse(req, res, response);
     } catch (error) {

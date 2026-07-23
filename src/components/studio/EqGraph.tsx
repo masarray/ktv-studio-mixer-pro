@@ -165,8 +165,9 @@ const GRID_FREQS = [20, 30, 50, 70, 100, 200, 500, 1000, 2000, 5000, 10000, 2000
 const GRID_DBS = [-24, -18, -12, -6, 0, 6, 12, 18, 24];
 
 export function EqGraph() {
-  const preset = useStudio((s) => s.preset);
   const eqKey = useStudio((s) => s.eqKey);
+  const section = useStudio((s) => s.preset?.eq?.[s.eqKey]);
+  const micEqLinked = useStudio((s) => Boolean(s.preset?.mic.eqLink));
   const page = useStudio((s) => s.page);
   const selectedBand = useStudio((s) => s.selectedBand);
   const selectBand = useStudio((s) => s.selectBand);
@@ -177,8 +178,7 @@ export function EqGraph() {
   const resetSelectedBand = useStudio((s) => s.resetSelectedBand);
   const toggle = useStudio((s) => s.toggle);
 
-  const section = preset?.eq?.[eqKey];
-  const eqKeys: string[] = (preset && page in ({ mic:1,music:1,main:1,surround:1,center:1,sub:1,reverb:1,echo:1 } as any))
+  const eqKeys: string[] = (section && page in ({ mic:1,music:1,main:1,surround:1,center:1,sub:1,reverb:1,echo:1 } as any))
     ? ((page === "mic") ? ["micA", "micB"] : [page === "main" ? "main" : page === "surround" ? "surround" : page === "center" ? "center" : page === "sub" ? "sub" : page === "music" ? "music" : page === "reverb" ? "reverb" : "echo"])
     : [];
 
@@ -188,11 +188,19 @@ export function EqGraph() {
     | { kind: "hp" | "lp" }
     | null
   >(null);
+  const sectionRef = useRef(section);
+  const setBandValuesRef = useRef(setBandValues);
+  const setPathRef = useRef(setPath);
+  sectionRef.current = section;
+  setBandValuesRef.current = setBandValues;
+  setPathRef.current = setPath;
 
   const points = useMemo(() => {
     const arr: number[] = [];
     const mn = Math.log10(MIN_FREQ), mx = Math.log10(MAX_FREQ);
-    for (let i = 0; i < 360; i++) arr.push(Math.pow(10, mn + (i / 359) * (mx - mn)));
+    // 280 log-spaced samples are visually continuous at this viewport while
+    // reducing biquad response work by ~22% on every live EQ frame.
+    for (let i = 0; i < 280; i++) arr.push(Math.pow(10, mn + (i / 279) * (mx - mn)));
     return arr;
   }, []);
 
@@ -230,10 +238,14 @@ export function EqGraph() {
   }, [section, curveSig, points]);
 
   useEffect(() => {
-    if (!section) return;
-    const onMove = (e: PointerEvent) => {
+    type PointerSample = Pick<PointerEvent, "clientX" | "clientY" | "shiftKey" | "ctrlKey" | "metaKey">;
+    let pending: PointerSample | null = null;
+    let moveFrame: number | null = null;
+
+    const processMove = (e: PointerSample) => {
       const drag = dragRef.current;
-      if (!drag || !svgRef.current) return;
+      const activeSection = sectionRef.current;
+      if (!drag || !activeSection || !svgRef.current) return;
       const rect = svgRef.current.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * W;
       const y = ((e.clientY - rect.top) / rect.height) * H;
@@ -244,19 +256,19 @@ export function EqGraph() {
       // narrower effect-filter range.
       if (drag.kind !== "band") {
         const freq = xToFreq(x);
-        const hpRange = filterRangeForEqKey(section.key, "hpf");
-        const lpRange = filterRangeForEqKey(section.key, "lpf");
+        const hpRange = filterRangeForEqKey(activeSection.key, "hpf");
+        const lpRange = filterRangeForEqKey(activeSection.key, "lpf");
         if (drag.kind === "hp") {
           // HPF and LPF are independent native parameters. Do not constrain
           // one against the other: the device allows them to cross/overlap.
-          setPath(`eq.${section.key}.crossover.hpfHz`, clamp(freq, hpRange.min, hpRange.max));
+          setPathRef.current(`eq.${activeSection.key}.crossover.hpfHz`, clamp(freq, hpRange.min, hpRange.max));
         } else {
-          setPath(`eq.${section.key}.crossover.lpfHz`, clamp(freq, lpRange.min, lpRange.max));
+          setPathRef.current(`eq.${activeSection.key}.crossover.lpfHz`, clamp(freq, lpRange.min, lpRange.max));
         }
         return;
       }
 
-      const band = section.bands[drag.idx];
+      const band = activeSection.bands[drag.idx];
       if (!band) return;
       const fine = e.shiftKey;
 
@@ -266,7 +278,7 @@ export function EqGraph() {
         drag.lastX = x; drag.lastY = y;
         const factor = Math.exp(-dy * (fine ? 0.003 : 0.012));
         const nextQ = Math.round(clamp(safeQ(band.q) * factor, 0.1, 30) * 100) / 100;
-        setBandValues(drag.idx, { q: nextQ });
+        setBandValuesRef.current(drag.idx, { q: nextQ });
         return;
       }
 
@@ -285,17 +297,42 @@ export function EqGraph() {
         if (Math.abs(nextGain) < 0.3) nextGain = 0;
       }
       drag.lastX = x; drag.lastY = y;
-      // Single state update + single (throttled) serial frame per drag tick.
-      setBandValues(drag.idx, { frequencyHz: nextFreq, gainDb: nextGain });
+      // One visual update per animation frame, even on a 500/1000 Hz mouse.
+      setBandValuesRef.current(drag.idx, { frequencyHz: nextFreq, gainDb: nextGain });
     };
-    const onUp = () => { dragRef.current = null; };
+
+    const flushPendingMove = () => {
+      moveFrame = null;
+      const sample = pending;
+      pending = null;
+      if (sample) processMove(sample);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      pending = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+      };
+      if (moveFrame === null) moveFrame = window.requestAnimationFrame(flushPendingMove);
+    };
+    const onUp = () => {
+      if (pending) flushPendingMove();
+      dragRef.current = null;
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      if (moveFrame !== null) window.cancelAnimationFrame(moveFrame);
+      moveFrame = null;
+      pending = null;
     };
-  }, [section, setBandValues, setPath]);
+  }, []);
 
   if (!section) return null;
   const band = section.bands[selectedBand] ?? section.bands[0];
@@ -323,9 +360,9 @@ export function EqGraph() {
               {(EQ_SECTIONS as Record<string, { label: string }>)[k]?.label || k}
             </button>
           ))}
-          {page === "mic" && preset && (
-            <label className={cn("mic-eq-link-control", preset.mic.eqLink && "active")} title="Link Mic A dan Mic B agar setiap edit PEQ dikirim ke kedua channel">
-              <input type="checkbox" checked={preset.mic.eqLink} onChange={() => toggle("mic.eqLink")} />
+          {page === "mic" && (
+            <label className={cn("mic-eq-link-control", micEqLinked && "active")} title="Link Mic A dan Mic B agar setiap edit PEQ dikirim ke kedua channel">
+              <input type="checkbox" checked={micEqLinked} onChange={() => toggle("mic.eqLink")} />
               <span className="mic-eq-link-led" />
               <span>EQ LINK</span>
             </label>
@@ -388,7 +425,8 @@ export function EqGraph() {
                 <path d={`${compositePath} L ${freqToX(MAX_FREQ).toFixed(2)} ${gainToY(0).toFixed(2)} L ${freqToX(MIN_FREQ).toFixed(2)} ${gainToY(0).toFixed(2)} Z`} fill="url(#eqCompositeFill)" />
                 {/* Dark separation stroke keeps a completely-flat EQ visible above the 0 dB grid line. */}
                 <path d={compositePath} fill="none" stroke="oklch(0.015 0.004 250 / 88%)" strokeWidth={6.2} strokeLinecap="round" strokeLinejoin="round" />
-                <path d={compositePath} fill="none" stroke="url(#eqCompositeStroke)" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 8px oklch(0.85 0.14 200 / 68%))" }} />
+                <path d={compositePath} fill="none" stroke="oklch(0.85 0.14 200 / 18%)" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
+                <path d={compositePath} fill="none" stroke="url(#eqCompositeStroke)" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
               </>
             )}
             {section.crossover && ([
@@ -417,11 +455,12 @@ export function EqGraph() {
                     onPointerDown={beginCrossoverDrag}
                   />
                   {/* Draggable crossover puck on the 0 dB line, like the native app */}
+                  <circle cx={cx} cy={cy} r={dragging ? 16 : 13} fill="oklch(0.82 0.18 78 / 16%)" pointerEvents="none" />
                   <circle
                     cx={cx} cy={cy} r={9}
                     fill="oklch(0.82 0.18 78)"
                     stroke="oklch(0 0 0 / 75%)" strokeWidth={1.5}
-                    style={{ filter: `drop-shadow(0 0 ${dragging ? 10 : 5}px oklch(0.82 0.18 78 / 70%))`, cursor: "ew-resize", touchAction: "none" }}
+                    style={{ cursor: "ew-resize", touchAction: "none" }}
                     onPointerDown={beginCrossoverDrag}
                   />
                   <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono" fontStyle="italic" fill="oklch(0.1 0 0)" fontWeight="800" pointerEvents="none">{label}</text>
@@ -434,10 +473,17 @@ export function EqGraph() {
               const isSel = idx === selectedBand;
               return (
                 <g key={idx}>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={isSel ? 18 : 13}
+                    fill={isSel ? "oklch(0.85 0.14 200 / 17%)" : "oklch(0.82 0.18 78 / 12%)"}
+                    pointerEvents="none"
+                  />
                   <circle cx={x} cy={y} r={isSel ? 10.5 : 8}
                     fill={isSel ? "oklch(0.85 0.14 200)" : "oklch(0.78 0.17 70)"}
                     stroke="oklch(0 0 0 / 75%)" strokeWidth={1.5}
-                    style={{ filter: `drop-shadow(0 0 ${isSel ? 11 : 5}px ${isSel ? "oklch(0.85 0.14 200 / 80%)" : "oklch(0.82 0.18 78 / 60%)"})`, cursor: "grab" }}
+                    style={{ cursor: "grab" }}
                     onPointerDown={(e) => {
                       (e.currentTarget as SVGCircleElement).setPointerCapture(e.pointerId);
                       const rect = svgRef.current?.getBoundingClientRect();

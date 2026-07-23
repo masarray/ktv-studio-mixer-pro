@@ -61,6 +61,7 @@ export interface Preset {
   mic: {
     micAVol: number;
     micBVol: number;
+    fbxLevel: number;
     noiseGateDb: number;
     eqLink: boolean;
     hpfHz: number;

@@ -489,6 +489,7 @@ const TOP_MIC_BLOCK_PATHS = new Set([
   "system.topMicVol",
   "mic.micAVol",
   "mic.micBVol",
+  "mic.fbxLevel",
   "mic.compThresholdDb",
   "mic.compRatio",
   "mic.attackMs",

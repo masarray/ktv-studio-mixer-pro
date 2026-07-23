@@ -226,6 +226,9 @@ function parseK500Preset(buffer) {
     mic: {
       micAVol: u8(view, 0x0014),
       micBVol: u8(view, 0x0015),
+      // Native Mic block payload bytes [4]/[5] mirror file bytes 0x1B/0x1C.
+      // The original editor exposes these as one shared FBX depth control.
+      fbxLevel: Math.round((u8(view, 0x001b) + u8(view, 0x001c)) / 2),
       noiseGateDb: u8(view, 0x0016) - 81,
       compThresholdDb: u8(view, 0x0017) - 50,
       compRatio: u8(view, 0x0018),
@@ -342,6 +345,8 @@ function serializeK500Preset(preset) {
 
   setU8(view, 0x0014, preset.mic.micAVol);
   setU8(view, 0x0015, preset.mic.micBVol);
+  setU8(view, 0x001b, clamp(preset.mic.fbxLevel, 0, 20));
+  setU8(view, 0x001c, clamp(preset.mic.fbxLevel, 0, 20));
   setU8(view, 0x0016, preset.mic.noiseGateDb + 81);
   setU8(view, 0x0017, preset.mic.compThresholdDb + 50);
   setU8(view, 0x0018, preset.mic.compRatio);

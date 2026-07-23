@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.8.44",
+  "downloadBaseUrl": "https://raw.githubusercontent.com/masarray/ktv-studio-mixer-pro/main/resources/presets/",
+  "presets": [
+    {
+      "id": "karaoke-artist-luxury",
+      "file": "KARAOKE_ARTIST_LUXURY.k500",
+      "name": "KARAOKE ARTIST LUXURY",
+      "version": "0.8.44",
+      "size": 1144,
+      "sha256": "bd32c5033f21f93a8cac9e2571cbe7acd1a7deb3727e4c5359f0569b1dd3c625"
+    }
+  ]
+}

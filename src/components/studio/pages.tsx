@@ -7,6 +7,7 @@ import { FILTER_TYPE_OPTIONS } from "@/features/k500/filterTypes";
 import { useK500Live } from "@/features/k500/live/liveStore";
 import { CompressorGraph } from "./CompressorGraph";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 
 const fmtRelease = (v: number) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
 
@@ -211,19 +212,19 @@ function CompressorPanel({
     >
       <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
         <CompressorGraph thresholdDb={comp.compThresholdDb} ratio={comp.compRatio} />
-        <div className="flex gap-4">
+        <div className="compressor-knob-bank flex gap-4">
           {includeGate && (
-            <Knob label="GATE" value={gateDb ?? -60} min={-80} max={0} step={1} unit="dB"
+            <Knob key={`${pathPrefix}:gate`} label="GATE" value={gateDb ?? -60} min={-80} max={0} step={1} unit="dB"
               onChange={(v) => setPath(`${pathPrefix}.noiseGateDb`, v)} />
           )}
-          <Knob label="THRES" value={comp.compThresholdDb} min={-50} max={0} step={1} unit="dB"
+          <Knob key={`${pathPrefix}:threshold`} label="THRES" value={comp.compThresholdDb} min={-50} max={0} step={1} unit="dB"
             onChange={(v) => setPath(`${pathPrefix}.compThresholdDb`, v)} />
-          <Knob label="RATIO" value={comp.compRatio} min={1} max={100} step={1}
+          <Knob key={`${pathPrefix}:ratio`} label="RATIO" value={comp.compRatio} min={1} max={100} step={1}
             onChange={(v) => setPath(`${pathPrefix}.compRatio`, v)}
             format={(v) => `1:${v}`} />
-          <Knob label="ATTACK" value={comp.attackMs} min={1} max={100} step={1} unit="ms"
+          <Knob key={`${pathPrefix}:attack`} label="ATTACK" value={comp.attackMs} min={1} max={100} step={1} unit="ms"
             onChange={(v) => setPath(`${pathPrefix}.attackMs`, v)} />
-          <Knob label="RELEASE" value={comp.releaseSec} min={0.1} max={5} step={0.1} unit="s"
+          <Knob key={`${pathPrefix}:release`} label="RELEASE" value={comp.releaseSec} min={0.1} max={5} step={0.1}
             onChange={(v) => setPath(`${pathPrefix}.releaseSec`, v)} format={fmtRelease} />
         </div>
       </div>
@@ -241,17 +242,17 @@ export function MicPage() {
     <div className="mic-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Input mixer" title="Mic Inputs" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
-          <VerticalFader label="MIC A" value={p.micAVol} min={0} max={100} onChange={(v) => setPath("mic.micAVol", v)} active />
+          <VerticalFader label="MIC A" value={p.micAVol} min={0} max={100} onChange={(v) => setPath("mic.micAVol", v)} />
           <VerticalFader label="MIC B" value={p.micBVol} min={0} max={100} onChange={(v) => setPath("mic.micBVol", v)} />
-          <VerticalFader label="FBX" value={0} min={0} max={20} onChange={() => {}} disabled badge="read-only" />
+        <VerticalFader label="FBX" value={p.fbxLevel} min={0} max={20} onChange={(v) => setPath("mic.fbxLevel", v)} badge="A+B" />
         </FaderRow>
       </Panel>
       <CompressorPanel title="Vocal Dynamics" pathPrefix="mic" comp={p} includeGate gateDb={p.noiseGateDb} />
       <Panel eyebrow="Filters" title="Band Limits" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-1 gap-2 crossover-control-stack">
-          <NumberField label="HPF" unit="Hz" min={20} max={20000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
+          <NumberField className="filter-frequency-field" label="HPF" unit="Hz" min={20} max={20000} value={p.hpfHz} onChange={(v) => setPath("mic.hpfHz", v)} />
           <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.micA.crossover.hpType", v)} />
-          <NumberField label="LPF" unit="Hz" min={20} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
+          <NumberField className="filter-frequency-field" label="LPF" unit="Hz" min={20} max={20000} value={p.lpfHz} onChange={(v) => setPath("mic.lpfHz", v)} />
           <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.micA.crossover.lpType", v)} />
         </div>
       </Panel>
@@ -295,7 +296,6 @@ export function MusicPage() {
                 max={12}
                 unit="dB"
                 onChange={(v) => setPath(`music.${String(field)}`, v)}
-                active={p.source === src}
               />
             </div>
           ))}
@@ -314,9 +314,9 @@ export function MusicPage() {
       </Panel>
 
       <Panel eyebrow="Filters" title="HPF / LPF" className="rack-panel music-filter-panel crossover-panel h-full" bodyClassName="music-filter-panel-body flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-        <InlineSlider label="LPF" value={c.lpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
+        <InlineSlider label="LPF" value={c.lpfHz} min={20} max={20000} unit="Hz" valueClassName="filter-frequency-readout" onChange={(v) => setPath("eq.music.crossover.lpfHz", v)} />
         <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.music.crossover.lpType", v)} />
-        <InlineSlider label="HPF" value={c.hpfHz} min={20} max={20000} unit="Hz" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
+        <InlineSlider label="HPF" value={c.hpfHz} min={20} max={20000} unit="Hz" valueClassName="filter-frequency-readout" onChange={(v) => setPath("eq.music.crossover.hpfHz", v)} />
         <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.music.crossover.hpType", v)} />
       </Panel>
     </div>
@@ -397,7 +397,7 @@ export function OutputPage({ which }: { which: OutKey }) {
       <Panel eyebrow={eyebrow} title={title} className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
           {faders.map((f) => (
-            <VerticalFader key={f.label} label={f.label} value={f.value} min={f.min} max={f.max} step={f.step} unit={f.unit}
+            <VerticalFader key={f.path} label={f.label} value={f.value} min={f.min} max={f.max} step={f.step} unit={f.unit}
               onChange={(v) => setPath(f.path, v)} />
           ))}
         </FaderRow>
@@ -407,7 +407,7 @@ export function OutputPage({ which }: { which: OutKey }) {
         <div className="output-band-limit-grid">
           <div className="grid gap-2 crossover-control-stack">
             {filters.map((f) => (
-              <NumberField key={f.label} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
+              <NumberField key={f.label} className={f.label === "HPF" || f.label === "LPF" ? "filter-frequency-field" : undefined} label={f.label} unit={(f as any).unit || "Hz"} min={f.min} max={f.max} value={f.value}
                 onChange={(v) => setPath(f.path, v)} />
             ))}
           </div>
@@ -431,16 +431,16 @@ export function ReverbPage() {
     <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Room engine" title="Reverb" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
-          <VerticalFader label="LEVEL" value={r.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.reverb.level", v)} active />
+          <VerticalFader label="LEVEL" value={r.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.reverb.level", v)} />
           <VerticalFader label="DECAY" value={r.decayMs} min={100} max={5000} unit="ms" onChange={(v) => setPath("effects.reverb.decayMs", v)} />
           <VerticalFader label="PRE" value={r.predelayMs} min={0} max={300} unit="ms" onChange={(v) => setPath("effects.reverb.predelayMs", v)} />
         </FaderRow>
       </Panel>
       <Panel eyebrow="Effect filters" title="Tone" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-2 gap-3 crossover-control-grid">
-          <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("reverb", "hpf").min} max={filterRangeForEqKey("reverb", "hpf").max} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
-          <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("reverb", "lpf").min} max={filterRangeForEqKey("reverb", "lpf").max} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
+          <NumberField className="filter-frequency-field" label="HPF" unit="Hz" min={filterRangeForEqKey("reverb", "hpf").min} max={filterRangeForEqKey("reverb", "hpf").max} value={r.hpfHz} onChange={(v) => setPath("effects.reverb.hpfHz", v)} />
           <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.reverb.crossover.hpType", v)} />
+          <NumberField className="filter-frequency-field" label="LPF" unit="Hz" min={filterRangeForEqKey("reverb", "lpf").min} max={filterRangeForEqKey("reverb", "lpf").max} value={r.lpfHz} onChange={(v) => setPath("effects.reverb.lpfHz", v)} />
           <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.reverb.crossover.lpType", v)} />
         </div>
       </Panel>
@@ -458,16 +458,16 @@ export function EchoPage() {
     <div className="effect-page responsive-rack-page grid gap-3 h-full items-stretch">
       <Panel eyebrow="Delay engine" title="Echo" className="rack-panel h-full" bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible">
         <FaderRow>
-          <VerticalFader label="LEVEL" value={e.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.echo.level", v)} active />
+          <VerticalFader label="LEVEL" value={e.level} min={0} max={100} unit="%" onChange={(v) => setPath("effects.echo.level", v)} />
           <VerticalFader label="REPEAT" value={e.repeat} min={0} max={100} onChange={(v) => setPath("effects.echo.repeat", v)} />
           <VerticalFader label="DELAY" value={e.leftDelayMs} min={0} max={1000} unit="ms" onChange={(v) => setPath("effects.echo.leftDelayMs", v)} />
         </FaderRow>
       </Panel>
       <Panel eyebrow="Delay filters" title="Tone" className="rack-panel crossover-panel h-full">
         <div className="grid grid-cols-2 gap-3 crossover-control-grid">
-          <NumberField label="HPF" unit="Hz" min={filterRangeForEqKey("echo", "hpf").min} max={filterRangeForEqKey("echo", "hpf").max} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
-          <NumberField label="LPF" unit="Hz" min={filterRangeForEqKey("echo", "lpf").min} max={filterRangeForEqKey("echo", "lpf").max} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
+          <NumberField className="filter-frequency-field" label="HPF" unit="Hz" min={filterRangeForEqKey("echo", "hpf").min} max={filterRangeForEqKey("echo", "hpf").max} value={e.hpfHz} onChange={(v) => setPath("effects.echo.hpfHz", v)} />
           <SelectField label="HP Type" value={c.hpType} options={[...FILTER_TYPE_OPTIONS.hpf]} onChange={(v) => setPath("eq.echo.crossover.hpType", v)} />
+          <NumberField className="filter-frequency-field" label="LPF" unit="Hz" min={filterRangeForEqKey("echo", "lpf").min} max={filterRangeForEqKey("echo", "lpf").max} value={e.lpfHz} onChange={(v) => setPath("effects.echo.lpfHz", v)} />
           <SelectField label="LP Type" value={c.lpType} options={[...FILTER_TYPE_OPTIONS.lpf]} onChange={(v) => setPath("eq.echo.crossover.lpType", v)} />
         </div>
       </Panel>
@@ -480,9 +480,19 @@ type PcPresetItem = {
   slot: number;
   file: string;
   name: string;
+  source: "factory" | "user";
   size: number;
   mtimeMs: number;
 };
+
+type PresetCatalogStatus = {
+  status: string;
+  catalogVersion?: string;
+  lastCheckedAt?: string;
+  lastError?: string;
+};
+
+const pcPresetKey = (item: Pick<PcPresetItem, "source" | "file">) => `${item.source}:${item.file}`;
 
 type BridgeMessage = Record<string, unknown>;
 
@@ -658,32 +668,46 @@ function usePcPresetLibrary() {
   const preset = useStudio((state) => state.preset);
   const [items, setItems] = useState<PcPresetItem[]>([]);
   const [root, setRoot] = useState<string>("");
+  const [catalog, setCatalog] = useState<PresetCatalogStatus>({ status: "bundled" });
   const [status, setStatus] = useState("Scanning PC preset root...");
   const [busyFile, setBusyFile] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setStatus("Scanning PC preset root...");
+  const refresh = useCallback(async (quiet = false) => {
+    if (!quiet) setStatus("Scanning PC preset root...");
     try {
-      const msg = await bridgeRequest<{ t: "pcPresets"; root: string; items: PcPresetItem[] }>({ t: "listPcPresets" }, "pcPresets");
+      const msg = await bridgeRequest<{ t: "pcPresets"; root: string; catalog?: PresetCatalogStatus; items: PcPresetItem[] }>({ t: "listPcPresets" }, "pcPresets");
       setItems(msg.items || []);
       setRoot(msg.root || "");
-      setStatus((msg.items || []).length ? `${msg.items.length} preset file ditemukan` : "Tidak ada file .k500 di root aplikasi");
+      setCatalog(msg.catalog || { status: "bundled" });
+      const syncLabel = msg.catalog?.catalogVersion
+        ? `factory v${msg.catalog.catalogVersion} ${msg.catalog.status}`
+        : msg.catalog?.status === "checking" ? "checking factory updates" : "bundled factory preset";
+      setStatus((msg.items || []).length ? `${msg.items.length} preset · ${syncLabel}` : "Tidak ada file .k500 di library aplikasi");
     } catch (err) {
-      setItems([]);
-      setRoot("");
-      setStatus(err instanceof Error ? err.message : String(err));
+      if (!quiet) {
+        setItems([]);
+        setRoot("");
+        setStatus(err instanceof Error ? err.message : String(err));
+      }
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    // The native bridge and online catalog intentionally start after first
+    // paint. One quiet follow-up picks up the result without permanent polling.
+    const timer = window.setTimeout(() => void refresh(true), 3500);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
 
-  const load = useCallback(async (file: string) => {
-    setBusyFile(file);
-    setStatus(`Loading ${file}...`);
+  const load = useCallback(async (item: PcPresetItem) => {
+    const key = pcPresetKey(item);
+    setBusyFile(key);
+    setStatus(`Loading ${item.file}...`);
     try {
-      const msg = await bridgeRequest<{ t: "pcPresetBytes"; file: string; name: string; hex: string }>({ t: "readPcPreset", file }, "pcPresetBytes", 5000);
-      importBuffer(hexToArrayBuffer(msg.hex), msg.file || file);
-      setStatus(`Loaded ${msg.file || file}`);
+      const msg = await bridgeRequest<{ t: "pcPresetBytes"; file: string; name: string; hex: string }>({ t: "readPcPreset", file: item.file, source: item.source }, "pcPresetBytes", 5000);
+      importBuffer(hexToArrayBuffer(msg.hex), msg.file || item.file);
+      setStatus(`Loaded ${msg.file || item.file}`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err));
     } finally {
@@ -691,15 +715,15 @@ function usePcPresetLibrary() {
     }
   }, [importBuffer]);
 
-  const readPreset = useCallback(async (file: string) => {
-    const msg = await bridgeRequest<{ t: "pcPresetBytes"; file: string; name: string; hex: string }>({ t: "readPcPreset", file }, "pcPresetBytes", 5000);
+  const readPreset = useCallback(async (item: PcPresetItem) => {
+    const msg = await bridgeRequest<{ t: "pcPresetBytes"; file: string; name: string; hex: string }>({ t: "readPcPreset", file: item.file, source: item.source }, "pcPresetBytes", 5000);
     return parseK500Preset(hexToArrayBuffer(msg.hex));
   }, []);
 
   const saveCurrent = useCallback(async () => {
     if (!preset) return;
     const file = safePresetFileName(preset.name || "K500_PRESET");
-    setBusyFile(file);
+    setBusyFile(`user:${file}`);
     setStatus(`Saving ${file}...`);
     try {
       const bytes = serializeK500Preset(structuredClone(preset));
@@ -720,7 +744,7 @@ function usePcPresetLibrary() {
     }
   }, [exportPreset, preset, root]);
 
-  return { items, root, status, busyFile, refresh, load, readPreset, saveCurrent, setStatus };
+  return { items, root, catalog, status, busyFile, refresh, load, readPreset, saveCurrent, setStatus };
 }
 
 function MassUploadDialog({
@@ -744,27 +768,36 @@ function MassUploadDialog({
 
   useEffect(() => {
     if (!open) return;
-    setQueue(items.slice(0, 10));
-    setAvailableFile(items[0]?.file ?? null);
-    setQueuedFile(null);
+    setQueue(items.slice(0, 1));
+    setAvailableFile(items[0] ? pcPresetKey(items[0]) : null);
+    setQueuedFile(items[0] ? pcPresetKey(items[0]) : null);
   }, [open, items]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [busy, onClose, open]);
 
   if (!open) return null;
 
   const addItem = (selected: PcPresetItem | undefined) => {
-    if (!selected || queue.some((item) => item.file === selected.file) || queue.length >= 10) return;
+    if (!selected || queue.some((item) => pcPresetKey(item) === pcPresetKey(selected)) || queue.length >= 10) return;
     setQueue((current) => [...current, selected]);
   };
-  const addSelected = () => addItem(items.find((item) => item.file === availableFile));
+  const addSelected = () => addItem(items.find((item) => pcPresetKey(item) === availableFile));
   const addAll = () => {
     setQueue((current) => {
-      const known = new Set(current.map((item) => item.file));
-      return [...current, ...items.filter((item) => !known.has(item.file))].slice(0, 10);
+      const known = new Set(current.map(pcPresetKey));
+      return [...current, ...items.filter((item) => !known.has(pcPresetKey(item)))].slice(0, 10);
     });
   };
   const removeSelected = () => {
     if (!queuedFile) return;
-    setQueue((current) => current.filter((item) => item.file !== queuedFile));
+    setQueue((current) => current.filter((item) => pcPresetKey(item) !== queuedFile));
     setQueuedFile(null);
   };
 
@@ -782,24 +815,28 @@ function MassUploadDialog({
             <div className="eyebrow">Device preset transfer</div>
             <h3 className="font-display">Mass Upload</h3>
           </div>
-          <button type="button" className="chrome-btn mass-upload-close" disabled={busy} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className="chrome-btn mass-upload-close" disabled={busy} onClick={onClose} aria-label="Close Mass Upload">
+            <X size={15} />
+          </button>
         </header>
 
         <div className="mass-upload-workspace">
           <div className="mass-upload-column">
             <div className="mass-upload-column-title">PC PRESET FILES</div>
+            <div className="mass-upload-table-head" aria-hidden="true"><span>NO.</span><strong>PRESET NAME</strong><em>STATUS</em></div>
             <div className="mass-upload-list panel-inset">
               {items.length ? items.map((item) => (
                 <button
                   type="button"
-                  key={item.file}
-                  className={cn("mass-upload-row", availableFile === item.file && "selected", queue.some((queued) => queued.file === item.file) && "queued")}
-                  onClick={() => setAvailableFile(item.file)}
+                  key={pcPresetKey(item)}
+                  className={cn("mass-upload-row", availableFile === pcPresetKey(item) && "selected", queue.some((queued) => pcPresetKey(queued) === pcPresetKey(item)) && "queued")}
+                  onClick={() => setAvailableFile(pcPresetKey(item))}
                   onDoubleClick={() => addItem(item)}
+                  aria-selected={availableFile === pcPresetKey(item)}
                 >
                   <span>{String(item.slot).padStart(2, "0")}</span>
                   <strong>{item.name || item.file}</strong>
-                  <em>{queue.some((queued) => queued.file === item.file) ? "ADDED" : ".K500"}</em>
+                  <em>{queue.some((queued) => pcPresetKey(queued) === pcPresetKey(item)) ? "ADDED" : item.source.toUpperCase()}</em>
                 </button>
               )) : <div className="mass-upload-empty">NO .K500 FILE</div>}
             </div>
@@ -813,15 +850,17 @@ function MassUploadDialog({
 
           <div className="mass-upload-column">
             <div className="mass-upload-column-title">DEVICE QUEUE · MAX 10</div>
+            <div className="mass-upload-table-head" aria-hidden="true"><span>NO.</span><strong>PRESET NAME</strong><em>DEST.</em></div>
             <div className="mass-upload-list panel-inset">
               {queue.length ? queue.map((item, index) => (
                 <button
                   type="button"
-                  key={item.file}
-                  className={cn("mass-upload-row", queuedFile === item.file && "selected")}
-                  onClick={() => setQueuedFile(item.file)}
+                  key={pcPresetKey(item)}
+                  className={cn("mass-upload-row", queuedFile === pcPresetKey(item) && "selected")}
+                  onClick={() => setQueuedFile(pcPresetKey(item))}
+                  aria-selected={queuedFile === pcPresetKey(item)}
                   onDoubleClick={() => {
-                    setQueue((current) => current.filter((queued) => queued.file !== item.file));
+                    setQueue((current) => current.filter((queued) => pcPresetKey(queued) !== pcPresetKey(item)));
                     setQueuedFile(null);
                   }}
                 >
@@ -850,7 +889,7 @@ function MassUploadDialog({
   );
 }
 
-export function SystemPage() {
+export function SystemPage({ masterSlot }: { masterSlot?: React.ReactNode }) {
   const preset = useStudio((s) => s.preset)!;
   const sourceName = useStudio((s) => s.sourceName);
   const setPath = useStudio((s) => s.setPath);
@@ -904,7 +943,7 @@ export function SystemPage() {
       const slots = [];
       for (let index = 0; index < source.length; index++) {
         const item = source[index];
-        slots.push({ slotOneBased: index + 1, preset: await pc.readPreset(item.file) });
+        slots.push({ slotOneBased: index + 1, preset: await pc.readPreset(item) });
       }
       await massUploadSlots(slots);
       const live = useK500Live.getState();
@@ -925,7 +964,7 @@ export function SystemPage() {
       >
         <div className="system-panel-compact-head shrink-0">
           <div className="font-display led-cyan truncate" title={pc.root || pc.status}>{pc.root || "PC PRESET ROOT"}</div>
-          <SystemButton active onClick={pc.refresh}>Refresh</SystemButton>
+          <SystemButton active onClick={() => void pc.refresh()}>Refresh</SystemButton>
         </div>
 
         <div className="system-preset-list system-pc-list panel-inset flex-1 min-h-0 overflow-y-auto p-2">
@@ -934,14 +973,14 @@ export function SystemPage() {
             return (
               <button
                 type="button"
-                key={item.file}
+                key={pcPresetKey(item)}
                 className={cn("system-preset-row system-pc-row", loaded && "active loaded")}
-                onClick={() => void pc.load(item.file)}
-                title={`${item.file} · ${formatFileSize(item.size)}`}
+                onClick={() => void pc.load(item)}
+                title={`${item.source === "factory" ? "Factory update" : "My preset"} · ${item.file} · ${formatFileSize(item.size)}`}
               >
                 <span className="slot">{item.slot}</span>
                 <span className="name">{item.name || item.file}</span>
-                {pc.busyFile === item.file ? <span className="tag">LOAD</span> : loaded ? <span className="tag">LOADED</span> : <span className="file-ext">.K500</span>}
+                {pc.busyFile === pcPresetKey(item) ? <span className="tag">LOAD</span> : loaded ? <span className="tag">LOADED</span> : <span className="file-ext">{item.source === "factory" ? "FACTORY" : "USER"}</span>}
               </button>
             );
           }) : (
@@ -1070,7 +1109,7 @@ export function SystemPage() {
         bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible"
       >
         <FaderRow className="w-full justify-evenly gap-4">
-          <VerticalFader label="MUSIC INIT" value={s.musicInitVol} min={0} max={84} onChange={(v) => setPath("system.musicInitVol", v)} active height={150} />
+          <VerticalFader label="MUSIC INIT" value={s.musicInitVol} min={0} max={84} onChange={(v) => setPath("system.musicInitVol", v)} height={150} />
           <VerticalFader label="MUSIC MAX" value={s.musicMaxVol} min={0} max={84} onChange={(v) => setPath("system.musicMaxVol", v)} height={150} />
           <VerticalFader label="MIC INIT" value={s.micInitVol} min={0} max={84} onChange={(v) => setPath("system.micInitVol", v)} height={150} />
           <VerticalFader label="MIC MAX" value={s.micMaxVol} min={0} max={84} onChange={(v) => setPath("system.micMaxVol", v)} height={150} />
@@ -1079,28 +1118,32 @@ export function SystemPage() {
       </Panel>
 
       <Panel
-        eyebrow="USB / UDisk"
-        title="Recording Levels"
+        eyebrow="USB / UDisk · Dance Mode"
+        title="Recording / Mic Trigger"
         className="system-record-panel h-full min-h-0"
         bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible"
       >
-        <FaderRow className="w-full justify-evenly gap-8">
-          <VerticalFader label="UDISK REC" value={s.uDiskRecordVol} min={1} max={6} onChange={(v) => setPath("system.uDiskRecordVol", v)} height={150} />
-          <VerticalFader label="USB REC" value={s.usbRecordVol} min={1} max={6} onChange={(v) => setPath("system.usbRecordVol", v)} active height={150} />
-        </FaderRow>
+        <div className="system-record-trigger-grid w-full min-w-0">
+          <section className="system-fader-group" aria-label="Recording levels">
+            <div className="system-fader-group-title">RECORDING</div>
+            <FaderRow className="w-full justify-evenly gap-3">
+              <VerticalFader label="UDISK REC" value={s.uDiskRecordVol} min={1} max={6} onChange={(v) => setPath("system.uDiskRecordVol", v)} height={150} />
+              <VerticalFader label="USB REC" value={s.usbRecordVol} min={1} max={6} onChange={(v) => setPath("system.usbRecordVol", v)} height={150} />
+            </FaderRow>
+          </section>
+          <section className="system-fader-group" aria-label="Dance mode microphone trigger">
+            <div className="system-fader-group-title">MIC TRIGGER</div>
+            <FaderRow className="w-full justify-evenly gap-3">
+              <VerticalFader label="THRESHOLD" value={s.danceMicThresholdDb ?? -50} min={-80} max={0} unit="dB" onChange={(v) => setPath("system.danceMicThresholdDb", v)} height={150} />
+              <VerticalFader label="HOLD TIME" value={s.danceMicTimeSec ?? 6} min={0} max={30} unit="s" onChange={(v) => setPath("system.danceMicTimeSec", v)} height={150} />
+            </FaderRow>
+          </section>
+        </div>
       </Panel>
 
-      <Panel
-        eyebrow="Dance Mode"
-        title="Mic Trigger"
-        className="system-dance-panel h-full min-h-0"
-        bodyClassName="rack-panel-body flex-1 min-h-0 flex items-center overflow-visible"
-      >
-        <FaderRow className="w-full justify-evenly gap-6">
-          <VerticalFader label="MIC THRES" value={s.danceMicThresholdDb ?? -50} min={-80} max={0} unit="dB" onChange={(v) => setPath("system.danceMicThresholdDb", v)} height={150} active />
-          <VerticalFader label="MIC TIME" value={s.danceMicTimeSec ?? 6} min={0} max={30} unit="s" onChange={(v) => setPath("system.danceMicTimeSec", v)} height={150} />
-        </FaderRow>
-      </Panel>
+      <div className="system-master-slot h-full min-h-0 overflow-hidden">
+        {masterSlot}
+      </div>
 
       <MassUploadDialog
         open={massUploadOpen}

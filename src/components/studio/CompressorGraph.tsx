@@ -10,7 +10,7 @@ const toY = (db: number) => {
   return H - PAD.bottom - t * (H - PAD.top - PAD.bottom);
 };
 
-export function CompressorGraph({ thresholdDb, ratio, knee = 4 }: { thresholdDb: number; ratio: number; knee?: number }) {
+export const CompressorGraph = memo(function CompressorGraph({ thresholdDb, ratio, knee = 4 }: { thresholdDb: number; ratio: number; knee?: number }) {
   const th = clamp(Number(thresholdDb) || -20, MIN, -1);
   const r = clamp(Number(ratio) || 1, 1, 100);
   const out = (input: number) => {
@@ -61,14 +61,17 @@ export function CompressorGraph({ thresholdDb, ratio, knee = 4 }: { thresholdDb:
         ))}
         {fill && <path d={fill} fill="url(#compFill)" />}
         <path d={ref} fill="none" stroke="oklch(1 0 0 / 22%)" strokeDasharray="4 4" strokeWidth={1.1} />
-        <path d={curve} fill="none" stroke="url(#compStroke)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 7px oklch(0.85 0.14 200 / 48%))" }} />
+        <path d={curve} fill="none" stroke="oklch(0.85 0.14 200 / 15%)" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={curve} fill="none" stroke="url(#compStroke)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
         <line x1={toX(th)} x2={toX(th)} y1={PAD.top} y2={H - PAD.bottom} stroke="oklch(0.82 0.18 78)" strokeDasharray="4 4" opacity="0.78" />
         <line x1={toX(slopeStart)} y1={toY(out(slopeStart))} x2={toX(slopeEnd)} y2={toY(out(slopeEnd))} stroke="oklch(0.85 0.14 200 / 42%)" strokeWidth={5} strokeLinecap="round" opacity=".24" />
-        <circle cx={toX(th)} cy={toY(th)} r="5" fill="oklch(0.82 0.18 78)" style={{ filter: "drop-shadow(0 0 8px oklch(0.82 0.18 78 / 85%))" }} />
+        <circle cx={toX(th)} cy={toY(th)} r="11" fill="oklch(0.82 0.18 78 / 18%)" />
+        <circle cx={toX(th)} cy={toY(th)} r="5" fill="oklch(0.82 0.18 78)" />
         <text x={toX(th) + 7} y={PAD.top + 13} fontSize="10" fontFamily="JetBrains Mono" fill="oklch(0.82 0.18 78)">TH {th} dB</text>
         <text x={W - PAD.right - 3} y={PAD.top + 13} fontSize="10" fontFamily="JetBrains Mono" fill="oklch(0.85 0.14 200)" textAnchor="end">SLOPE 1:{r}</text>
         <text x={PAD.left + 3} y={PAD.top + 13} fontSize="9" fontFamily="JetBrains Mono" fill="oklch(0.66 0.018 250)">IN → OUT</text>
       </svg>
     </div>
   );
-}
+});
+import { memo } from "react";

@@ -2,6 +2,18 @@
 
 Professional K500 karaoke processor preset editor with live USB HID / Bluetooth control, PEQ, crossover, dynamics, mixer controls, device preset recall/save, and mass upload.
 
+## Built-in PC Mode preset
+
+The Windows desktop application ships with `KARAOKE ARTIST LUXURY`. Factory
+presets are stored separately from the user-owned
+`Documents\SONKUPIK STUDIO Presets` library and appear with a `FACTORY` badge
+in PC Mode. v0.8.44+ checks the public preset catalog after startup, validates
+every download with SHA-256 plus the K500 checksum, and never blocks an offline
+launch. `Save to PC` always writes a `USER` preset to Documents.
+
+See [`docs/PRESET_CATALOG_SYNC.md`](docs/PRESET_CATALOG_SYNC.md) for publishing
+new factory presets to every v0.8.44+ desktop user.
+
 ## Development
 
 ```bash
@@ -19,6 +31,10 @@ npm run test:desktop-server
 ```
 
 ## Windows portable single EXE
+
+> For daily use, the **Setup installer is recommended**. A portable single EXE
+> must unpack its embedded Electron runtime on every cold start, while the
+> installed build launches directly from its permanent application directory.
 
 Double-click:
 
@@ -53,6 +69,12 @@ Outputs:
 ```text
 release\SONKUPIK-STUDIO-<version>-Portable.exe
 release\SONKUPIK-STUDIO-<version>-Setup.exe
+```
+
+To build only the recommended fast-start installer, double-click:
+
+```text
+build-installer.cmd
 ```
 
 ## Automated release

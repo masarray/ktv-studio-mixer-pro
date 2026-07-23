@@ -16,7 +16,8 @@
  * (AA len16LE body cs, 0x40 mode byte 0x00) and pads into 64-byte reports.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -24,6 +25,9 @@ const K500_USB_VENDOR_ID = 0x10c4;
 const K500_USB_PRODUCT_ID = 0x0321;
 const LAST_GOOD_FILE = path.join(tmpdir(), "k500-bridge-last-port.json");
 let PRESET_ROOT = path.resolve(process.env.K500_PRESET_ROOT || process.cwd());
+let FACTORY_PRESET_ROOT = process.env.K500_FACTORY_PRESET_ROOT
+  ? path.resolve(process.env.K500_FACTORY_PRESET_ROOT)
+  : null;
 const PRESET_NAME_OFFSET = 0x0454;
 const PRESET_NAME_LENGTH = 0x21;
 
@@ -90,11 +94,13 @@ function safePresetFileName(file) {
   return base.toLowerCase().endsWith(".k500") ? base : `${base}.k500`;
 }
 
-function presetPath(file) {
+function presetPath(file, source = "user") {
   const safe = safePresetFileName(file);
   if (!safe) throw new Error("Nama preset tidak valid.");
-  const full = path.join(PRESET_ROOT, safe);
-  if (path.dirname(full) !== PRESET_ROOT) throw new Error("Path preset tidak valid.");
+  const root = source === "factory" ? FACTORY_PRESET_ROOT : PRESET_ROOT;
+  if (!root) throw new Error("Factory preset root tidak tersedia.");
+  const full = path.join(root, safe);
+  if (path.dirname(full) !== root) throw new Error("Path preset tidak valid.");
   return full;
 }
 
@@ -109,22 +115,53 @@ function readPresetLabel(filePath) {
   return path.basename(filePath, path.extname(filePath)).replace(/[_-]+/g, " ").trim();
 }
 
-function listPcPresets() {
-  if (!existsSync(PRESET_ROOT)) return [];
-  return readdirSync(PRESET_ROOT, { withFileTypes: true })
+function listPresetRoot(root, source) {
+  if (!root || !existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".k500"))
     .map((entry) => {
-      const full = path.join(PRESET_ROOT, entry.name);
+      const full = path.join(root, entry.name);
       const st = statSync(full);
       return {
         file: entry.name,
         name: readPresetLabel(full),
+        source,
+        digest: createHash("sha256").update(readFileSync(full)).digest("hex"),
         size: st.size,
         mtimeMs: st.mtimeMs,
       };
+    });
+}
+
+function listPcPresets() {
+  const factory = listPresetRoot(FACTORY_PRESET_ROOT, "factory");
+  const factoryDigests = new Map(factory.map((item) => [item.file.toLowerCase(), item.digest]));
+  // v0.8.43 seeded the bundled preset into Documents. Hide that exact legacy
+  // duplicate, while still showing a same-name file if the user edited it.
+  const user = listPresetRoot(PRESET_ROOT, "user").filter(
+    (item) => factoryDigests.get(item.file.toLowerCase()) !== item.digest,
+  );
+  return [...factory, ...user]
+    .sort((a, b) => {
+      if (a.source !== b.source) return a.source === "factory" ? -1 : 1;
+      return a.file.localeCompare(b.file, undefined, { numeric: true, sensitivity: "base" });
     })
-    .sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true, sensitivity: "base" }))
-    .map((item, idx) => ({ slot: idx + 1, ...item }));
+    .map(({ digest: _digest, ...item }, idx) => ({ slot: idx + 1, ...item }));
+}
+
+function presetCatalogStatus() {
+  if (!FACTORY_PRESET_ROOT) return { status: "unavailable" };
+  try {
+    const value = JSON.parse(readFileSync(path.join(FACTORY_PRESET_ROOT, ".catalog-state.json"), "utf8"));
+    return {
+      status: String(value.status || "bundled"),
+      catalogVersion: String(value.catalogVersion || ""),
+      lastCheckedAt: String(value.lastCheckedAt || ""),
+      lastError: String(value.lastError || ""),
+    };
+  } catch {
+    return { status: "bundled", catalogVersion: "", lastCheckedAt: "", lastError: "" };
+  }
 }
 
 function bytesToHex(buf) { return Buffer.from(buf).toString("hex"); }
@@ -241,8 +278,12 @@ export async function startBridge({
   host = "127.0.0.1",
   port = Number(process.env.K500_BRIDGE_PORT || 8500),
   presetRoot = process.env.K500_PRESET_ROOT || process.cwd(),
+  factoryPresetRoot = process.env.K500_FACTORY_PRESET_ROOT || null,
 } = {}) {
   PRESET_ROOT = path.resolve(presetRoot);
+  FACTORY_PRESET_ROOT = factoryPresetRoot ? path.resolve(factoryPresetRoot) : null;
+  mkdirSync(PRESET_ROOT, { recursive: true });
+  if (FACTORY_PRESET_ROOT) mkdirSync(FACTORY_PRESET_ROOT, { recursive: true });
   const { WebSocketServer } = await import("ws");
   const wss = new WebSocketServer({ host, port, path: "/k500" });
 
@@ -258,7 +299,14 @@ export async function startBridge({
 
       if (msg.t === "listPcPresets") {
         try {
-          send({ t: "pcPresets", id: msg.id, root: PRESET_ROOT, items: listPcPresets() });
+          send({
+            t: "pcPresets",
+            id: msg.id,
+            root: PRESET_ROOT,
+            factoryRoot: FACTORY_PRESET_ROOT,
+            catalog: presetCatalogStatus(),
+            items: listPcPresets(),
+          });
         } catch (err) {
           send({ t: "error", id: msg.id, msg: `PC preset scan gagal: ${err?.message || err}` });
         }
@@ -267,9 +315,10 @@ export async function startBridge({
 
       if (msg.t === "readPcPreset") {
         try {
-          const full = presetPath(msg.file);
+          const source = msg.source === "factory" ? "factory" : "user";
+          const full = presetPath(msg.file, source);
           const bytes = readFileSync(full);
-          send({ t: "pcPresetBytes", id: msg.id, file: path.basename(full), name: readPresetLabel(full), hex: bytesToHex(bytes) });
+          send({ t: "pcPresetBytes", id: msg.id, file: path.basename(full), source, name: readPresetLabel(full), hex: bytesToHex(bytes) });
         } catch (err) {
           send({ t: "error", id: msg.id, msg: `PC preset read gagal: ${err?.message || err}` });
         }
@@ -278,10 +327,10 @@ export async function startBridge({
 
       if (msg.t === "savePcPreset") {
         try {
-          const full = presetPath(msg.file);
+          const full = presetPath(msg.file, "user");
           const bytes = hexToBuffer(msg.hex);
           writeFileSync(full, bytes);
-          send({ t: "pcPresetSaved", id: msg.id, file: path.basename(full), root: PRESET_ROOT, items: listPcPresets() });
+          send({ t: "pcPresetSaved", id: msg.id, file: path.basename(full), source: "user", root: PRESET_ROOT, items: listPcPresets() });
         } catch (err) {
           send({ t: "error", id: msg.id, msg: `PC preset save gagal: ${err?.message || err}` });
         }

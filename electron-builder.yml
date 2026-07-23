@@ -28,6 +28,13 @@ files:
   - node_modules/node-gyp-build/**/*
   - node_modules/debug/**/*
   - node_modules/ms/**/*
+extraResources:
+  # Shipped outside ASAR so Electron can seed the user's editable PC Mode
+  # library on first launch for both Portable and Setup builds.
+  - from: resources/presets
+    to: presets
+    filter:
+      - "**/*.k500"
 asarUnpack:
   - "**/*.node"
   - "node_modules/node-hid/**/*"
@@ -35,6 +42,11 @@ asarUnpack:
   - "node_modules/serialport/**/*"
   - "node_modules/@serialport/**/*"
 win:
+  # Community builds are intentionally unsigned. Skip certificate discovery
+  # and signtool retries, while leaving executable resource editing enabled so
+  # the application icon, product name, and version remain embedded.
+  signExecutable: false
+  forceCodeSigning: false
   icon: build/sonkupik.ico
   executableName: sonkupik_karaoke
   target:

@@ -54,6 +54,29 @@ function setPathOn(obj: any, path: string, value: any) {
   parent[last] = typeof old === "number" ? Number(value) : value;
 }
 
+function eqKeysTouchedByPath(path: string): string[] {
+  const eqMatch = /^eq\.([^.]+)\./.exec(path);
+  if (eqMatch) return eqMatch[1] === "micA" || eqMatch[1] === "micB" ? ["micA", "micB"] : [eqMatch[1]];
+  if (path === "mic.hpfHz" || path === "mic.lpfHz") return ["micA", "micB"];
+  if (path === "outputs.sub.hpfHz" || path === "outputs.sub.lpfHz") return ["sub"];
+  if (path === "effects.reverb.hpfHz" || path === "effects.reverb.lpfHz") return ["reverb"];
+  if (path === "effects.echo.hpfHz" || path === "effects.echo.lpfHz") return ["echo"];
+  return [];
+}
+
+/** Refresh only edited EQ section identities so the large graph does not
+ * repaint when an unrelated mixer fader changes. */
+function refreshEqSectionIdentity(preset: Preset, keys: string[]) {
+  const unique = [...new Set(keys)].filter((key) => preset.eq[key]);
+  if (!unique.length) return;
+  const eq = { ...preset.eq };
+  for (const key of unique) {
+    const section = eq[key];
+    eq[key] = { ...section, bands: [...section.bands], crossover: { ...section.crossover } };
+  }
+  preset.eq = eq;
+}
+
 function setFilterPathWithAliases(preset: Preset, path: string, value: any) {
   const typeMatch = /^eq\.([^.]+)\.crossover\.(hpType|lpType)$/.exec(path);
   if (typeMatch) {
@@ -315,6 +338,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (field === "q") band.q = clamp(Number(value) || 0.1, 0.1, 30);
     if (field === "gainDb") band.gainDb = clamp(Number(value) || 0, -24, 24);
     const liveWrites = applyMicEqLinkMirror(preset, eqKey, i, band);
+    refreshEqSectionIdentity(preset, liveWrites.map((write) => write.eqKey));
     set({ preset: { ...preset }, dirty: true });
     sendEqLiveWrites(liveWrites, i);
   },
@@ -331,6 +355,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (values.q !== undefined) band.q = clamp(Number(values.q) || 0.1, 0.1, 30);
     if (values.gainDb !== undefined) band.gainDb = clamp(Number(values.gainDb) || 0, -24, 24);
     const liveWrites = applyMicEqLinkMirror(preset, eqKey, i, band);
+    refreshEqSectionIdentity(preset, liveWrites.map((write) => write.eqKey));
     set({ preset: { ...preset }, dirty: true });
     sendEqLiveWrites(liveWrites, i);
   },
@@ -339,6 +364,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const { preset } = get();
     if (!preset) return;
     setFilterPathWithAliases(preset, path, value);
+    refreshEqSectionIdentity(preset, eqKeysTouchedByPath(path));
     set({ preset: { ...preset }, dirty: true });
     void useK500Live.getState().sendPathUpdate(path, preset);
   },
@@ -380,6 +406,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (!preset) return;
     preset.eq.micB.bands = structuredClone(preset.eq.micA.bands);
     preset.mic.eqLink = true;
+    refreshEqSectionIdentity(preset, ["micB"]);
     set({ preset: { ...preset }, dirty: true });
   },
 
@@ -390,6 +417,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (!band) return;
     band.type = "P"; band.frequencyHz = 1000; band.q = 1; band.gainDb = 0;
     const liveWrites = applyMicEqLinkMirror(preset, eqKey, selectedBand, band);
+    refreshEqSectionIdentity(preset, liveWrites.map((write) => write.eqKey));
     set({ preset: { ...preset }, dirty: true });
     sendEqLiveWrites(liveWrites, selectedBand);
   },

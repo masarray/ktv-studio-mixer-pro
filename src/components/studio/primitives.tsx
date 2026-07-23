@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /* ============== Panel ============== */
@@ -72,7 +72,7 @@ export function LedReadout({
 }
 
 /* ============== Vertical Fader ============== */
-export function VerticalFader({
+export const VerticalFader = memo(function VerticalFader({
   label,
   value,
   min,
@@ -82,7 +82,6 @@ export function VerticalFader({
   onChange,
   badge,
   format,
-  active,
   disabled,
   height = 126,
 }: {
@@ -95,18 +94,14 @@ export function VerticalFader({
   onChange?: (v: number) => void;
   badge?: string;
   format?: (v: number) => string;
-  active?: boolean;
   disabled?: boolean;
   height?: number;
 }) {
   const display = format ? format(value) : `${value}${unit ? ` ${unit}` : ""}`;
   return (
-    <div className={cn("fader-strip flex flex-col items-center gap-1.5 px-1.5 py-1.5 rounded-lg overflow-visible",
-      active && "bg-[oklch(0.85_0.14_200/0.06)] ring-1 ring-[color:var(--cyan)]/30")}
-    >
-      <div className="flex flex-col items-center gap-0.5">
-        <div className={cn("text-[10px] font-semibold tracking-wider uppercase text-center font-display",
-          active ? "led-cyan" : "text-muted-foreground")}>{label}</div>
+    <div className="fader-strip flex flex-col items-center gap-1.5 px-1.5 py-1.5 rounded-lg overflow-visible">
+      <div className="fader-label-slot flex flex-col items-center gap-0.5">
+        <div className="fader-label text-[10px] font-semibold tracking-wider uppercase text-center font-display text-muted-foreground">{label}</div>
         {badge && <div className="eyebrow text-[9px] text-muted-foreground/80">{badge}</div>}
       </div>
       <div className="relative mx-auto fader-track-shell" style={{ height, width: 42 }}>
@@ -128,6 +123,8 @@ export function VerticalFader({
           step={step}
           value={value}
           disabled={disabled}
+          aria-label={`${label} fader`}
+          aria-valuetext={display}
           onChange={(e) => onChange?.(Number(e.target.value))}
           onWheel={(e) => {
             if (disabled || !onChange) return;
@@ -143,10 +140,21 @@ export function VerticalFader({
       <LedReadout className="fader-readout justify-center" value={display.replace(/ .*$/, "")} unit={unit || (typeof display === "string" ? display.split(" ")[1] : "")} size="sm" />
     </div>
   );
-}
+}, (previous, next) => (
+  previous.label === next.label
+  && previous.value === next.value
+  && previous.min === next.min
+  && previous.max === next.max
+  && previous.step === next.step
+  && previous.unit === next.unit
+  && previous.badge === next.badge
+  && previous.disabled === next.disabled
+  && previous.height === next.height
+  && String(previous.format) === String(next.format)
+));
 
 /* ============== Knob (rotary) ============== */
-export function Knob({
+export const Knob = memo(function Knob({
   label,
   value,
   min,
@@ -172,8 +180,23 @@ export function Knob({
   const display = format ? format(value) : `${value}${unit ? ` ${unit}` : ""}`;
   const ref = useRef<HTMLDivElement | null>(null);
   const dragging = useRef<{ y: number; v: number } | null>(null);
+  const onChangeRef = useRef(onChange);
+  const pendingValue = useRef<number | null>(null);
+  const changeFrame = useRef<number | null>(null);
+
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
+    const scheduleChange = (next: number) => {
+      pendingValue.current = next;
+      if (changeFrame.current !== null) return;
+      changeFrame.current = window.requestAnimationFrame(() => {
+        changeFrame.current = null;
+        const pending = pendingValue.current;
+        pendingValue.current = null;
+        if (pending !== null) onChangeRef.current?.(pending);
+      });
+    };
     const move = (e: PointerEvent) => {
       if (!dragging.current) return;
       const dy = dragging.current.y - e.clientY;
@@ -184,13 +207,19 @@ export function Knob({
       if (step >= 1) next = Math.round(next);
       else next = Math.round(next / step) * step;
       next = Math.max(min, Math.min(max, next));
-      onChange?.(Number(next.toFixed(2)));
+      scheduleChange(Number(next.toFixed(2)));
     };
     const up = () => { dragging.current = null; document.body.style.cursor = ""; };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-  }, [min, max, step, onChange]);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (changeFrame.current !== null) window.cancelAnimationFrame(changeFrame.current);
+      changeFrame.current = null;
+      pendingValue.current = null;
+    };
+  }, [min, max, step]);
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -210,8 +239,22 @@ export function Knob({
           next = Math.max(min, Math.min(max, next));
           onChange?.(Number(next.toFixed(2)));
         }}
-        className="relative select-none cursor-ns-resize"
+        className="knob-control relative select-none cursor-ns-resize"
         style={{ width: size, height: size }}
+        role="slider"
+        tabIndex={0}
+        aria-label={`${label} knob`}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={display}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowUp" && e.key !== "ArrowRight" && e.key !== "ArrowDown" && e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          const dir = e.key === "ArrowUp" || e.key === "ArrowRight" ? 1 : -1;
+          const next = Math.max(min, Math.min(max, value + dir * step));
+          onChange?.(Number(next.toFixed(2)));
+        }}
       >
         <svg viewBox="0 0 100 100" width={size} height={size}>
           <defs>
@@ -227,23 +270,40 @@ export function Knob({
           <path
             d="M 18 82 A 36 36 0 1 1 82 82"
             fill="none"
+            stroke="oklch(0.85 0.14 200 / 16%)"
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray="170"
+            strokeDashoffset={170 - t * 170}
+          />
+          <path
+            d="M 18 82 A 36 36 0 1 1 82 82"
+            fill="none"
             stroke="var(--cyan)"
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray="170"
             strokeDashoffset={170 - t * 170}
-            style={{ filter: "drop-shadow(0 0 4px oklch(0.85 0.14 200 / 70%))" }}
           />
-          <circle cx="50" cy="55" r="27" fill="url(#knobFace)" stroke="oklch(0 0 0 / 70%)" />
-          <g transform={`rotate(${angle} 50 55)`}>
-            <line x1="50" y1="32" x2="50" y2="44" stroke="var(--amber)" strokeWidth="3" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 4px oklch(0.82 0.18 78 / 80%))" }} />
+          <circle cx="50" cy="64" r="24.5" fill="url(#knobFace)" stroke="oklch(0 0 0 / 70%)" />
+          <g transform={`rotate(${angle} 50 64)`}>
+            <line x1="50" y1="43" x2="50" y2="53" stroke="var(--amber)" strokeWidth="3" strokeLinecap="round" />
           </g>
         </svg>
       </div>
       <LedReadout value={display.replace(new RegExp(`\\s*${unit}$`), "")} unit={unit} size="sm" />
     </div>
   );
-}
+}, (previous, next) => (
+  previous.label === next.label
+  && previous.value === next.value
+  && previous.min === next.min
+  && previous.max === next.max
+  && previous.step === next.step
+  && previous.unit === next.unit
+  && previous.size === next.size
+  && String(previous.format) === String(next.format)
+));
 
 /* ============== Toggle ============== */
 export function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
@@ -261,15 +321,16 @@ export function Toggle({ label, value, onChange }: { label: string; value: boole
 
 /* ============== Mini number input ============== */
 export function NumberField({
-  label, value, min, max, step = 1, unit, onChange,
+  label, value, min, max, step = 1, unit, onChange, className,
 }: {
   label: string; value: number; min: number; max: number; step?: number; unit?: string;
   onChange: (v: number) => void;
+  className?: string;
 }) {
   const [local, setLocal] = useState(String(value));
   useEffect(() => setLocal(String(value)), [value]);
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={cn("flex flex-col gap-1.5", className)}>
       <span className="eyebrow">{label}{unit ? ` · ${unit}` : ""}</span>
       <input
         type="number"

@@ -16,6 +16,13 @@ dist-ssr
 .nitro
 *.local
 
+# Test / coverage / cache output
+coverage/
+.cache/
+.vite/
+.eslintcache
+*.tsbuildinfo
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
@@ -34,3 +41,23 @@ dist-ssr
 # Electron release artifacts
 release/
 out/
+build-output/
+win-unpacked/
+*-unpacked/
+*.exe
+*.msi
+*.msix
+*.appx
+*.appxbundle
+*.blockmap
+latest*.yml
+builder-debug.yml
+builder-effective-config.yaml
+
+# Local packaging bundles and temporary signing files
+*.zip
+*.7z
+*.pfx
+*.p12
+*.cer
+*.pem

@@ -1,13 +1,15 @@
-import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { startAppServer } from "./local-server.mjs";
-import { startBridge } from "../tools/k500-bridge.mjs";
+import { provisionBuiltInPresets } from "./preset-library.mjs";
+import { syncFactoryPresetCatalog } from "./preset-catalog.mjs";
 
 const APP_ID = "com.masari.sonkupik.karaoke";
 let mainWindow = null;
 let appServer = null;
 let bridgeServer = null;
+let bridgeStartPromise = null;
 
 app.setAppUserModelId(APP_ID);
 
@@ -26,21 +28,53 @@ function assetPath(...parts) {
   return path.join(app.getAppPath(), ...parts);
 }
 
-async function startNativeBridge() {
-  const presetRoot = path.join(app.getPath("documents"), "SONKUPIK STUDIO Presets");
-  mkdirSync(presetRoot, { recursive: true });
-  process.env.K500_PRESET_ROOT ||= presetRoot;
-  process.env.K500_BRIDGE_PORT ||= "8500";
+function builtInPresetPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "presets")
+    : assetPath("resources", "presets");
+}
 
-  // A normal relative ESM import is ASAR-aware and avoids the invalid raw
-  // Windows path (C:\...) previously passed to dynamic import().
-  bridgeServer = await startBridge({ port: 8500, presetRoot });
+async function startNativeBridge() {
+  if (bridgeStartPromise) return bridgeStartPromise;
+  bridgeStartPromise = (async () => {
+    const presetRoot = path.join(app.getPath("documents"), "SONKUPIK STUDIO Presets");
+    const factoryPresetRoot = path.join(app.getPath("userData"), "Factory Presets");
+    mkdirSync(presetRoot, { recursive: true });
+    provisionBuiltInPresets({ sourceRoot: builtInPresetPath(), presetRoot: factoryPresetRoot });
+    process.env.K500_PRESET_ROOT ||= presetRoot;
+    process.env.K500_FACTORY_PRESET_ROOT ||= factoryPresetRoot;
+    process.env.K500_BRIDGE_PORT ||= "8500";
+
+    // Keep the native transport stack out of the first-render critical path.
+    // node-hid/serialport are still loaded lazily by the bridge only when the
+    // user presses Connect, while the bridge WebSocket becomes available a
+    // moment after the renderer has painted.
+    const { startBridge } = await import("../tools/k500-bridge.mjs");
+    bridgeServer = await startBridge({ port: 8500, presetRoot, factoryPresetRoot });
+
+    // The editor and native bridge are already usable before any network I/O.
+    // Catalog errors are stored as status only; an offline launch remains fast
+    // and the bundled factory preset continues to work.
+    if (process.env.SONKUPIK_PRESET_SYNC_DISABLED !== "1") {
+      setImmediate(() => {
+        void syncFactoryPresetCatalog({ factoryRoot: factoryPresetRoot, userPresetRoot: presetRoot });
+      });
+    }
+    return bridgeServer;
+  })();
+  return bridgeStartPromise;
 }
 
 async function createMainWindow() {
-  if (!appServer) {
-    appServer = await startAppServer({ appRoot: app.getAppPath() });
-  }
+  // Start SSR/static initialization in parallel with BrowserWindow creation.
+  // Previously the window did not even exist until the whole server module
+  // had loaded, adding avoidable time to every cold start.
+  const serverPromise = appServer
+    ? Promise.resolve(appServer)
+    : startAppServer({ appRoot: app.getAppPath() }).then((server) => {
+        appServer = server;
+        return server;
+      });
 
   mainWindow = new BrowserWindow({
     title: "SONKUPIK STUDIO — Karaoke Processor",
@@ -66,13 +100,22 @@ async function createMainWindow() {
 
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   mainWindow.on("closed", () => { mainWindow = null; });
-  await mainWindow.loadURL(appServer.origin);
+  const server = await serverPromise;
+  await mainWindow.loadURL(server.origin);
 }
 
 app.whenReady().then(async () => {
   try {
-    await startNativeBridge();
     await createMainWindow();
+
+    // The editor is usable while the hardware bridge initializes. A bridge
+    // failure must never block opening or editing a local preset.
+    setImmediate(() => {
+      void startNativeBridge().catch((error) => {
+        bridgeStartPromise = null;
+        console.warn("[desktop] native bridge unavailable:", error instanceof Error ? error.message : String(error));
+      });
+    });
   } catch (error) {
     console.error("[desktop] startup failed", error);
     dialog.showErrorBox("SONKUPIK STUDIO", error instanceof Error ? error.message : String(error));

@@ -40,9 +40,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 }
 
 :root {
@@ -99,9 +99,7 @@
     font-feature-settings: "ss01", "cv11";
     background-image:
       radial-gradient(1200px 600px at 20% -10%, oklch(0.28 0.04 240 / 35%), transparent 60%),
-      radial-gradient(900px 500px at 110% 10%, oklch(0.24 0.06 290 / 25%), transparent 60%),
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    background-attachment: fixed;
+      radial-gradient(900px 500px at 110% 10%, oklch(0.24 0.06 290 / 25%), transparent 60%);
   }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.01em; }
 }
@@ -610,22 +608,7 @@ html, body, #app { height: 100%; overflow: hidden; }
   text-shadow: 0 1px 3px oklch(0 0 0 / 85%);
 }
 
-.system-page {
-  grid-template-columns: minmax(430px, 1.14fr) minmax(300px, 0.86fr) minmax(300px, 0.86fr);
-  grid-template-rows: minmax(206px, 1fr) minmax(206px, 1fr) 264px;
-  grid-template-areas:
-    "library profile bluetooth"
-    "library access dance"
-    "startup startup record";
-}
-.system-library-panel { grid-area: library; }
 .system-card { min-height: 0; }
-.system-startup-panel { grid-area: startup; }
-.system-record-panel { grid-area: record; }
-.system-page > .panel-bevel:nth-child(2) { grid-area: profile; }
-.system-page > .panel-bevel:nth-child(3) { grid-area: bluetooth; }
-.system-page > .panel-bevel:nth-child(4) { grid-area: access; }
-.system-page > .panel-bevel:nth-child(5) { grid-area: dance; }
 .system-page .panel-bevel > header {
   min-height: 50px;
 }
@@ -731,10 +714,6 @@ html, body, #app { height: 100%; overflow: hidden; }
   letter-spacing: .08em;
 }
 @media (max-width: 1420px) {
-  .system-page {
-    grid-template-columns: minmax(390px, 1fr) minmax(285px, .8fr) minmax(285px, .8fr);
-    grid-template-rows: minmax(196px, 1fr) minmax(196px, 1fr) 248px;
-  }
   .system-page .fader-strip { width: 54px; min-width: 54px; max-width: 54px; }
 }
 
@@ -742,10 +721,6 @@ html, body, #app { height: 100%; overflow: hidden; }
    UI-only patch: keep native-bridge BT/USB, heartbeat, sync/readback, and live mapping unchanged. */
 :root {
   --k500-lower-rack-height: 304px;
-}
-.system-page {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) var(--k500-lower-rack-height) !important;
-  align-items: stretch;
 }
 .system-startup-panel,
 .system-record-panel,
@@ -775,35 +750,10 @@ html, body, #app { height: 100%; overflow: hidden; }
 .master-bottom-strip .fader-input {
   min-height: 126px;
 }
-@media (max-width: 1420px) {
-  .system-page {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) var(--k500-lower-rack-height) !important;
-  }
-}
-
 /* K500 v0.8.12 — Senior workflow System page.
    PC Mode is a real PC-root preset file view. Equipment Mode is the KTV internal
    device-slot list, not a duplicate dropdown. UI-only for destructive device
    slot commands: keep native bridge, heartbeat, sync/readback, and live mapping unchanged. */
-.system-page {
-  grid-template-columns: minmax(420px, 1.02fr) minmax(390px, 0.98fr) minmax(300px, 0.78fr) !important;
-  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height) !important;
-  grid-template-areas:
-    "pc device side"
-    "startup startup record" !important;
-  align-items: stretch;
-}
-.system-pc-panel { grid-area: pc; }
-.system-device-panel { grid-area: device; }
-.system-side-stack { grid-area: side; grid-template-rows: minmax(126px, 0.86fr) minmax(132px, 0.98fr) minmax(104px, 0.72fr); }
-.system-startup-panel { grid-area: startup; }
-.system-record-panel { grid-area: record; }
-.system-page > .panel-bevel:nth-child(2),
-.system-page > .panel-bevel:nth-child(3),
-.system-page > .panel-bevel:nth-child(4),
-.system-page > .panel-bevel:nth-child(5) {
-  grid-area: auto;
-}
 .system-pc-panel > header,
 .system-device-panel > header,
 .system-side-card > header {
@@ -889,14 +839,10 @@ html, body, #app { height: 100%; overflow: hidden; }
 }
 .system-empty-state b { color: var(--cyan); font-weight: 800; }
 @media (max-width: 1420px) {
-  .system-page {
-    grid-template-columns: minmax(380px, 1fr) minmax(360px, .94fr) minmax(286px, .74fr) !important;
-  }
   .system-device-list .system-preset-row {
     min-height: 24px;
     margin-bottom: 3px;
   }
-  .system-side-stack { grid-template-rows: minmax(118px, .82fr) minmax(128px, 1fr) minmax(98px, .72fr); }
 }
 
 /* K500 v0.8.13 — System/Music native-parity layout correction.
@@ -938,28 +884,12 @@ html, body, #app { height: 100%; overflow: hidden; }
   padding-left: 6px;
   padding-right: 6px;
 }
-.system-page {
-  grid-template-columns: minmax(400px, 1.05fr) minmax(360px, .98fr) minmax(280px, .74fr) !important;
-  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height) !important;
-  grid-template-areas:
-    "pc device side"
-    "startup record dance" !important;
-}
-.system-side-stack {
-  grid-area: side;
-  grid-template-rows: minmax(132px, .82fr) minmax(160px, 1fr) !important;
-}
-.system-dance-panel { grid-area: dance; }
-.system-startup-panel { grid-area: startup; }
-.system-record-panel { grid-area: record; }
-.system-dance-panel,
 .system-startup-panel,
 .system-record-panel,
 .master-bottom-strip {
   height: var(--k500-lower-rack-height) !important;
   min-height: var(--k500-lower-rack-height) !important;
 }
-.system-dance-panel > div:last-child,
 .system-startup-panel > div:last-child,
 .system-record-panel > div:last-child {
   height: 100%;
@@ -974,9 +904,6 @@ html, body, #app { height: 100%; overflow: hidden; }
   .music-inline-slider {
     grid-template-columns: 72px 1fr 52px !important;
     gap: 6px !important;
-  }
-  .system-page {
-    grid-template-columns: minmax(360px, 1fr) minmax(330px, .96fr) minmax(250px, .72fr) !important;
   }
 }
 
@@ -1508,13 +1435,6 @@ html, body, #app { height: 100%; overflow: hidden; }
     display: none !important;
   }
 
-  /* System keeps Master Strip aligned with the lower rack instead of climbing upward. */
-  .studio-workspace-system .master-rail {
-    width: 176px;
-    grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
-  }
-  .studio-workspace-system .master-bottom-strip { grid-row: 2; }
-
   /* PEQ pages take the full top width. Master occupies only the lower-right rack cell. */
   .studio-workspace-peq { position: relative; }
   .studio-workspace-peq .studio-page-content {
@@ -1549,11 +1469,6 @@ html, body, #app { height: 100%; overflow: hidden; }
     min-width: 170px;
     max-width: 170px;
   }
-  .studio-workspace-system .master-rail {
-    width: 164px;
-    grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
-  }
-  .studio-workspace-system .master-bottom-strip { grid-row: 2; }
   .studio-workspace-peq .master-rail { width: 164px; }
   .studio-workspace-peq .rack-row { padding-right: 176px; }
 }
@@ -1990,26 +1905,6 @@ html, body, #app { height: 100%; overflow: hidden; }
   background: linear-gradient(180deg, oklch(0 0 0 / 8%), oklch(0 0 0 / 19%));
 }
 
-@media (max-width: 1500px) {
-  /* Mic Trigger is secondary. Master Strip becomes the sole right-side lower utility. */
-  .system-dance-panel {
-    display: none !important;
-  }
-  .system-page {
-    grid-template-areas:
-      "pc device side"
-      "startup record record" !important;
-  }
-  .studio-workspace-system .master-context-rail {
-    display: none !important;
-  }
-  .studio-workspace-system .master-rail {
-    width: var(--k500-master-lower-width) !important;
-    max-width: var(--k500-master-lower-width) !important;
-    grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height) !important;
-  }
-}
-
 @media (max-width: 1280px) {
   .output-page {
     grid-template-columns: minmax(288px, 1.02fr) minmax(305px, 1.3fr) 224px !important;
@@ -2018,4 +1913,379 @@ html, body, #app { height: 100%; overflow: hidden; }
     grid-template-columns: minmax(0, 1fr) 94px minmax(0, 1fr);
     gap: 9px;
   }
+}
+
+/* K500 v0.8.40 — System uses one authoritative, gapless 3-column × 2-row
+   composition. Master Strip is a real System grid cell; Mic Trigger remains
+   available inside Recording instead of disappearing at desktop breakpoints. */
+.system-page {
+  --system-grid-gap: 12px;
+  display: grid;
+  grid-template-columns:
+    minmax(340px, 1.08fr)
+    minmax(320px, 1fr)
+    minmax(270px, .82fr);
+  grid-template-rows: minmax(0, 1fr) var(--k500-lower-rack-height);
+  grid-template-areas:
+    "pc device side"
+    "startup record master";
+  gap: var(--system-grid-gap);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.system-pc-panel { grid-area: pc; }
+.system-device-panel { grid-area: device; }
+.system-side-stack {
+  grid-area: side;
+  grid-template-rows: minmax(0, .84fr) minmax(0, 1.16fr);
+}
+.system-startup-panel {
+  grid-area: startup;
+  height: 100% !important;
+  min-height: 0;
+}
+.system-record-panel { grid-area: record; }
+.system-master-slot { grid-area: master; }
+
+.system-page > .panel-bevel,
+.system-side-stack > .panel-bevel,
+.system-master-slot .panel-bevel {
+  min-width: 0;
+  border-color: oklch(1 0 0 / 9%);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 4%),
+    0 8px 22px oklch(0 0 0 / 12%);
+}
+
+.system-master-slot .master-rail {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+.system-master-slot .master-context-rail {
+  display: none !important;
+}
+.system-master-slot .master-bottom-strip {
+  grid-row: 1 !important;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.system-master-slot .master-bottom-strip > div:last-child {
+  padding-inline: clamp(14px, 1.8vw, 28px) !important;
+}
+.system-master-slot .master-bottom-strip > div:last-child > div {
+  width: 100%;
+  max-width: 276px;
+  justify-content: space-between !important;
+}
+
+.system-record-trigger-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+}
+.system-fader-group {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px 5px 2px;
+  border-radius: 10px;
+  border: 1px solid oklch(1 0 0 / 5%);
+  background: linear-gradient(180deg, oklch(1 0 0 / 1.8%), oklch(0 0 0 / 7%));
+}
+.system-fader-group-title {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: oklch(0.7 0.03 230);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .15em;
+}
+.system-record-panel > div:last-child {
+  padding-inline: 10px !important;
+}
+.system-page .system-field > span,
+.system-page .eyebrow {
+  font-size: 9px;
+}
+
+@media (max-width: 1320px) {
+  .system-page {
+    --system-grid-gap: 10px;
+    grid-template-columns:
+      minmax(300px, 1.08fr)
+      minmax(286px, 1fr)
+      minmax(238px, .82fr);
+  }
+  .system-record-trigger-grid { gap: 7px; }
+  .system-fader-group { padding-inline: 2px; }
+  .system-master-slot .master-bottom-strip > div:last-child { padding-inline: 8px !important; }
+}
+
+@media (max-width: 1080px) {
+  .system-page {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Keep every System control reachable on compact desktop windows.
+       The side stack needs more vertical room than a single fader rack, so
+       the page scrolls internally instead of clipping BT/Admin fields. */
+    grid-template-rows:
+      360px
+      480px
+      var(--k500-lower-rack-height);
+    grid-template-areas:
+      "pc device"
+      "side startup"
+      "record master";
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-right: 3px;
+  }
+}
+
+/* K500 v0.8.41 — unified control rhythm, single-focus faders, larger preset
+   slots, collision-free compressor knobs, and selectable Mass Upload queue. */
+.studio-shell,
+.studio-shell * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.studio-shell input:not([type="range"]),
+.studio-shell textarea,
+.studio-shell [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* All VerticalFader instances share one label/readout datum. Highlight follows
+   actual keyboard/pointer focus, therefore only one fader can glow at a time. */
+.fader-row {
+  align-items: stretch !important;
+}
+.fader-strip {
+  min-height: 0;
+  box-sizing: border-box;
+  background: transparent;
+  box-shadow: 0 0 0 1px transparent;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.fader-label-slot {
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  justify-content: flex-end;
+  overflow: visible;
+}
+.fader-label {
+  width: 100%;
+  min-height: 11px;
+  line-height: 1.05;
+  transition: color 110ms ease, text-shadow 110ms ease;
+}
+.fader-input {
+  outline: none;
+}
+.fader-readout,
+.master-bottom-strip .fader-readout {
+  height: 25px !important;
+  min-height: 25px !important;
+  margin-top: auto !important;
+  align-items: center !important;
+  align-self: center;
+  line-height: 1 !important;
+}
+.fader-strip:focus-within {
+  background: oklch(0.85 0.14 200 / 6%);
+  box-shadow:
+    inset 0 0 0 1px oklch(0.85 0.14 200 / 34%),
+    0 0 17px oklch(0.85 0.14 200 / 8%);
+}
+.fader-strip:focus-within .fader-label {
+  color: var(--cyan);
+  text-shadow: 0 0 8px oklch(0.85 0.14 200 / 62%);
+}
+.fader-strip:has(.fader-input:disabled) {
+  opacity: .58;
+}
+
+/* Lower the physical knob face inside its scale so the cyan value arc remains
+   visually continuous. Keyboard focus also gets a restrained control halo. */
+.compressor-knob-bank {
+  align-items: flex-start;
+  padding-top: 5px;
+}
+.knob-control {
+  border-radius: 999px;
+  outline: none;
+}
+.knob-control:focus-visible {
+  box-shadow: 0 0 0 1px oklch(0.85 0.14 200 / 45%), 0 0 12px oklch(0.85 0.14 200 / 12%);
+}
+
+/* The preset area has spare vertical space at full desktop size. Spend it on
+   scanability rather than leaving an oversized dead zone below ten tiny rows. */
+.system-device-heading .led-cyan {
+  font-size: 13.5px !important;
+}
+.system-device-list {
+  height: 302px !important;
+  min-height: 302px !important;
+  max-height: 302px !important;
+  padding: 7px !important;
+}
+.system-device-list .system-preset-row {
+  min-height: 27px !important;
+  height: 27px !important;
+  margin-bottom: 2px !important;
+  grid-template-columns: 29px minmax(0, 1fr) 52px !important;
+  padding-inline: 8px !important;
+}
+.system-device-list .system-preset-row .slot {
+  font-size: 11.5px !important;
+}
+.system-device-list .system-preset-row .name {
+  font-size: 11.2px !important;
+  letter-spacing: .015em;
+}
+.system-device-list .system-preset-row .tag {
+  font-size: 8.5px !important;
+}
+.system-pc-list .system-preset-row {
+  min-height: 36px !important;
+  height: 36px;
+  grid-template-columns: 31px minmax(0, 1fr) auto;
+  padding-inline: 10px;
+}
+.system-pc-list .system-preset-row .slot {
+  font-size: 12.5px;
+}
+.system-pc-list .system-preset-row .name {
+  font-size: 12px;
+}
+
+/* Modern native-dialog interpretation of the reference Mass Upload chooser. */
+.mass-upload-dialog {
+  width: min(860px, calc(100vw - 48px));
+  height: min(510px, calc(100vh - 48px));
+}
+.mass-upload-column {
+  grid-template-rows: auto 24px minmax(0, 1fr);
+  gap: 6px;
+}
+.mass-upload-table-head {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid oklch(1 0 0 / 6%);
+  border-radius: 6px 6px 2px 2px;
+  background: oklch(1 0 0 / 2.5%);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+.mass-upload-table-head strong {
+  font-size: inherit;
+}
+.mass-upload-table-head em {
+  font-style: normal;
+}
+.mass-upload-row {
+  min-height: 34px;
+}
+.mass-upload-row > strong {
+  font-size: 10.5px;
+}
+.mass-upload-close {
+  display: grid;
+  place-items: center;
+}
+
+@media (min-width: 1081px) and (max-width: 1420px) {
+  .system-device-list {
+    height: 272px !important;
+    min-height: 272px !important;
+    max-height: 272px !important;
+  }
+  .system-device-list .system-preset-row {
+    min-height: 24px !important;
+    height: 24px !important;
+  }
+  .system-device-list .system-preset-row .name {
+    font-size: 10.6px !important;
+  }
+}
+
+@media (max-width: 1080px) {
+  .system-device-list {
+    height: 224px !important;
+    min-height: 224px !important;
+    max-height: 224px !important;
+    padding: 6px !important;
+  }
+  .system-device-list .system-preset-row {
+    min-height: 19px !important;
+    height: 19px !important;
+    grid-template-columns: 23px minmax(0, 1fr) 43px !important;
+    padding-inline: 6px !important;
+  }
+  .system-device-list .system-preset-row .slot,
+  .system-device-list .system-preset-row .name {
+    font-size: 9.5px !important;
+  }
+  .mass-upload-workspace {
+    grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
+  }
+}
+
+/* v0.8.42 final cascade: compact HPF/LPF rails and lower knob bank. */
+.mic-page { grid-template-columns: minmax(248px, .82fr) minmax(390px, 1.72fr) 158px !important; }
+.music-page { grid-template-columns: minmax(440px, 1.62fr) minmax(224px, .92fr) 180px !important; }
+.output-page { grid-template-columns: minmax(320px, 1.22fr) minmax(360px, 1.55fr) 212px !important; }
+.effect-page { grid-template-columns: minmax(380px, 1fr) 214px !important; }
+.crossover-control-stack > .filter-frequency-field { width: 52%; min-width: 66px; max-width: 78px; }
+.crossover-control-grid .filter-frequency-field,
+.output-band-limit-grid .filter-frequency-field { width: 100%; min-width: 0; max-width: none; }
+.filter-frequency-readout,
+.music-inline-field.filter-frequency-readout { width: 39px !important; min-width: 39px !important; }
+.music-inline-slider:has(.filter-frequency-readout) { grid-template-columns: 54px minmax(0, 1fr) 39px !important; gap: 6px !important; }
+.filter-frequency-readout .music-inline-input { padding-inline: 4px !important; text-align: center; font-size: 9.5px; }
+.filter-frequency-readout > span { display: none; }
+.output-band-limit-grid { grid-template-columns: minmax(72px, .72fr) minmax(106px, 1.28fr); gap: 8px; }
+.output-band-limit-panel > div:last-child { padding-inline: 9px !important; }
+.output-band-limit-panel .crossover-control-stack { gap: 5px !important; }
+.output-band-limit-panel .crossover-control-stack > label { gap: 3px !important; }
+.output-band-limit-panel .studio-input,
+.output-band-limit-panel .studio-select { height: 28px; }
+.effect-page .crossover-control-grid {
+  grid-template-columns: 66px minmax(0, 1fr) !important;
+  gap: 9px 8px !important;
+}
+.compressor-knob-bank { padding-top: 7px; }
+.fader-strip,
+.knob-control,
+.music-horizontal-range { contain: layout paint; }
+
+@media (max-width: 1280px) {
+  .mic-page { grid-template-columns: minmax(188px, .7fr) minmax(308px, 1.45fr) 148px !important; }
+  .music-page { grid-template-columns: minmax(360px, 1.45fr) minmax(208px, .9fr) 166px !important; }
+  .output-page { grid-template-columns: minmax(274px, 1.1fr) minmax(306px, 1.4fr) 198px !important; }
+  .effect-page { grid-template-columns: minmax(300px, 1fr) 202px !important; }
 }

@@ -6,7 +6,7 @@ on:
       version:
         description: Release version, for example v0.8.30
         required: true
-        default: v0.8.35
+        default: v0.8.44
   push:
     tags:
       - 'v*'
@@ -35,16 +35,40 @@ jobs:
         shell: powershell
         run: |
           $version = "$env:RELEASE_VERSION".TrimStart('v')
-          npm version $version --no-git-tag-version --allow-same-version --allow-same-version
+          npm version $version --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate built-in presets
+        run: npm run test:builtin-presets
+
+      - name: Validate background factory preset catalog
+        run: npm run test:preset-catalog
+
+      - name: Ensure committed preset catalog is current
+        run: npm run presets:catalog:check
+
+      - name: Validate responsive System layout
+        run: npm run test:system-layout
+
+      - name: Validate unified UX controls
+        run: npm run test:ux-controls
+
+      - name: Validate v0.8.42 hardening
+        run: npm run test:v0842-hardening
+
+      - name: Validate v0.8.43 performance hardening
+        run: npm run test:v0843-performance
 
       - name: Build web application
         run: npm run build
 
       - name: Validate embedded desktop server
         run: npm run test:desktop-server
+
+      - name: Normalize Electron package metadata
+        run: npm run test:electron-metadata && npm run desktop:prepare && npm run test:windows-packaging
 
       - name: Build portable EXE and installer
         run: npx electron-builder --win portable nsis --x64 --publish never
@@ -59,6 +83,13 @@ jobs:
           $nativeRoot = 'release\win-unpacked\resources\app.asar.unpacked\node_modules'
           if (!(Get-ChildItem "$nativeRoot\node-hid" -Recurse -Filter '*.node' -ErrorAction SilentlyContinue)) { throw 'Packaged node-hid binary missing' }
           if (!(Get-ChildItem "$nativeRoot\@serialport" -Recurse -Filter '*.node' -ErrorAction SilentlyContinue)) { throw 'Packaged serialport binary missing' }
+          $factoryPreset = 'release\win-unpacked\resources\presets\KARAOKE_ARTIST_LUXURY.k500'
+          if (!(Test-Path $factoryPreset)) { throw 'Packaged KARAOKE ARTIST LUXURY preset missing' }
+          $presetBytes = [IO.File]::ReadAllBytes($factoryPreset)
+          if ($presetBytes.Length -ne 1144) { throw 'Packaged factory preset has invalid size' }
+          $presetChecksum = 0
+          foreach ($byte in $presetBytes) { $presetChecksum = ($presetChecksum + $byte) -band 0xff }
+          if ($presetChecksum -ne 0) { throw 'Packaged factory preset checksum invalid' }
           @($portable, $installer) | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)" | Add-Content 'release\SHA256SUMS.txt'
@@ -88,10 +119,13 @@ jobs:
           body: |
             Choose one Windows package:
 
-            - **Portable** — run directly, no installation required.
-            - **Setup** — installs Start Menu and Desktop shortcuts.
+            - **Setup (recommended)** — fastest startup; installs Start Menu and Desktop shortcuts.
+            - **Portable** — no installation required, but Windows must unpack it on every cold start.
 
-            Both packages contain the same SONKUPIK STUDIO application.
+            Both packages contain the same SONKUPIK STUDIO application and the
+            built-in **KARAOKE ARTIST LUXURY** PC Mode preset. v0.8.44 and newer
+            also check the public factory preset catalog in the background;
+            personal presets in Documents are never overwritten.
           files: |
             release/SONKUPIK-STUDIO-*-Portable.exe
             release/SONKUPIK-STUDIO-*-Setup.exe

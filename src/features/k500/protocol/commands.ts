@@ -452,13 +452,15 @@ export function buildTopMusicBlock(preset: Preset, deviceScalars: Uint8Array | n
  * verified compressor encodings (TH -12 → +50 = 0x26, ratio 3, attack 10,
  * release 0.2 s → ×10 = 2):
  *
- *   AA 0E 00 05 [vol] [init] [max] [x0E] [00] [00] [micA] [micB]
+ *   AA 0E 00 05 [vol] [init] [max] [gate] [fbxA] [fbxB] [micA] [micB]
  *               [compTH+50] [ratio] [attack] [rel×10] [00] CS
  *
  * The previous builder put topMusicVol/topEffectVol at [1][2] (device fields
  * micInit/micMax), micAVol at [3] (unknown device field), micBVol at [6][7],
  * and eqLink at [12] — every mic fader move corrupted five device fields.
- * Rarely-edited fields are mirrored from the device scalar cache.
+ * Bytes [4]/[5] map to live scalar 0x13/0x14 (file 0x1B/0x1C). The native
+ * UI presents them as one FBX depth, so the shared editor value is written
+ * to both channels. Rarely-edited fields are mirrored from the device cache.
  */
 export function buildTopMicBlock(preset: Preset, deviceScalars: Uint8Array | null): Uint8Array {
   const m = preset.mic;
@@ -470,9 +472,9 @@ export function buildTopMicBlock(preset: Preset, deviceScalars: Uint8Array | nul
     byte(clamp(preset.system.topMicVol, 0, TOP_VOL_MAX)), // [0] master mic volume
     raw(0x0a, byte(preset.system.micInitVol)),            // [1] mic init vol (device-mirrored)
     raw(0x0b, TOP_VOL_MAX),                               // [2] mic max vol (device-mirrored)
-    raw(0x0e, 0x0b),                                      // [3] unknown field (device-mirrored)
-    0x00,                                                 // [4] 0x00 in all sniffed frames
-    0x00,                                                 // [5] 0x00 in all sniffed frames
+    raw(0x0e, 0x0b),                                      // [3] noise gate (device-mirrored)
+    byte(clamp(m.fbxLevel, 0, 20)),                       // [4] FBX Mic A (live 0x13)
+    byte(clamp(m.fbxLevel, 0, 20)),                       // [5] FBX Mic B (live 0x14)
     byte(m.micAVol),                                      // [6] mic A input volume (live 0x0C)
     byte(m.micBVol),                                      // [7] mic B input volume (live 0x0D)
     byte(m.compThresholdDb + 50),                         // [8] comp threshold, TH+50
