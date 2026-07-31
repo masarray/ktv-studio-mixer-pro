@@ -1,10 +1,10 @@
-name: Release Windows
+name: Build Windows and publish distribution release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version, for example v0.8.30
+        description: Release version, for example v0.8.45
         required: true
         default: v0.8.44
   push:
@@ -12,7 +12,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   windows-release:
@@ -20,9 +20,19 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+      TARGET_RELEASE_REPOSITORY: masarray/sonkupik-studio
 
     steps:
-      - name: Checkout
+      - name: Verify cross-repository release credential
+        shell: powershell
+        env:
+          RELEASE_TOKEN: ${{ secrets.SONKUPIK_STUDIO_RELEASE_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_TOKEN)) {
+            throw 'Missing SONKUPIK_STUDIO_RELEASE_TOKEN. Add a fine-grained token with Contents: Read and write access to masarray/sonkupik-studio.'
+          }
+
+      - name: Checkout application source
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -73,7 +83,7 @@ jobs:
       - name: Build portable EXE and installer
         run: npx electron-builder --win portable nsis --x64 --publish never
 
-      - name: Verify artifacts
+      - name: Verify artifacts and generate SHA-256 manifest
         shell: powershell
         run: |
           $portable = Get-ChildItem 'release\SONKUPIK-STUDIO-*-Portable.exe' | Select-Object -First 1
@@ -90,6 +100,7 @@ jobs:
           $presetChecksum = 0
           foreach ($byte in $presetBytes) { $presetChecksum = ($presetChecksum + $byte) -band 0xff }
           if ($presetChecksum -ne 0) { throw 'Packaged factory preset checksum invalid' }
+          Remove-Item 'release\SHA256SUMS.txt' -ErrorAction SilentlyContinue
           @($portable, $installer) | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)" | Add-Content 'release\SHA256SUMS.txt'
@@ -110,23 +121,34 @@ jobs:
           if-no-files-found: error
           path: release/SONKUPIK-STUDIO-*-Setup.exe
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Publish official release to distribution repository
+        uses: softprops/action-gh-release@v3
         with:
+          repository: ${{ env.TARGET_RELEASE_REPOSITORY }}
+          token: ${{ secrets.SONKUPIK_STUDIO_RELEASE_TOKEN }}
           tag_name: ${{ env.RELEASE_VERSION }}
+          target_commitish: main
           name: SONKUPIK STUDIO ${{ env.RELEASE_VERSION }}
-          generate_release_notes: true
+          fail_on_unmatched_files: true
+          preserve_order: true
           body: |
-            Choose one Windows package:
+            Official SONKUPIK STUDIO Windows distribution.
+
+            Choose one package:
 
             - **Setup (recommended)** — fastest startup; installs Start Menu and Desktop shortcuts.
-            - **Portable** — no installation required, but Windows must unpack it on every cold start.
+            - **Portable** — no installation required, but Windows must unpack the embedded Electron runtime on every cold start.
 
-            Both packages contain the same SONKUPIK STUDIO application and the
-            built-in **KARAOKE ARTIST LUXURY** PC Mode preset. v0.8.44 and newer
-            also check the public factory preset catalog in the background;
-            personal presets in Documents are never overwritten.
+            Both packages contain the same application and the built-in **KARAOKE ARTIST LUXURY** PC Mode preset. Current releases also check the public factory preset catalog in the background; personal presets in Documents are never overwritten.
+
+            Distribution provenance:
+
+            - Source repository: https://github.com/${{ github.repository }}
+            - Source commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            - Build workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Download `SHA256SUMS.txt` from this release and verify the exact package filename before opening it.
           files: |
-            release/SONKUPIK-STUDIO-*-Portable.exe
             release/SONKUPIK-STUDIO-*-Setup.exe
+            release/SONKUPIK-STUDIO-*-Portable.exe
             release/SHA256SUMS.txt
