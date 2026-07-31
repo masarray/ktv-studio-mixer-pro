@@ -2,6 +2,18 @@
 
 Professional K500 karaoke processor preset editor with live USB HID / Bluetooth control, PEQ, crossover, dynamics, mixer controls, device preset recall/save, and mass upload.
 
+## Repository architecture
+
+This repository contains the **application source code and Windows build workflow**.
+
+Public product information, GitHub Pages and official Windows release assets are published separately through [`masarray/sonkupik-studio`](https://github.com/masarray/sonkupik-studio):
+
+- [English product website](https://masarray.github.io/sonkupik-studio/)
+- [Website Bahasa Indonesia](https://masarray.github.io/sonkupik-studio/id/)
+- [Latest official release](https://github.com/masarray/sonkupik-studio/releases/latest)
+
+Keeping source and public distribution separate makes the release surface easier for general users to understand while preserving this repository as the engineering workspace.
+
 ## Built-in PC Mode preset
 
 The Windows desktop application ships with `KARAOKE ARTIST LUXURY`. Factory
@@ -79,7 +91,19 @@ build-installer.cmd
 
 ## Automated release
 
-`.github/workflows/release-windows.yml` builds both artifacts when run manually or when a `v*` tag is pushed. Windows code signing is intentionally not required; signing can be added later through electron-builder environment secrets without changing the app code.
+`.github/workflows/release-windows.yml` builds and validates both Windows artifacts when run manually or when a `v*` tag is pushed. The workflow then publishes the official release to [`masarray/sonkupik-studio`](https://github.com/masarray/sonkupik-studio), not to this source repository.
+
+### Required cross-repository secret
+
+Add an Actions secret in this repository named:
+
+```text
+SONKUPIK_STUDIO_RELEASE_TOKEN
+```
+
+Use a fine-grained personal access token limited to the `masarray/sonkupik-studio` repository with **Contents: Read and write** permission. Do not grant access to unrelated repositories. The target repository's release event automatically refreshes the reviewed release snapshot used by GitHub Pages.
+
+Windows code signing is intentionally not required; signing can be added later through electron-builder environment secrets without changing the public repository architecture.
 
 ### Dependency/network behavior
 
