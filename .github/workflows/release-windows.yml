@@ -10,6 +10,10 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - '.github/release-version.txt'
 
 permissions:
   contents: read
@@ -19,10 +23,42 @@ jobs:
     runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       TARGET_RELEASE_REPOSITORY: masarray/sonkupik-studio
 
     steps:
+      - name: Checkout application source
+        uses: actions/checkout@v4
+
+      - name: Resolve and validate release version
+        shell: powershell
+        run: |
+          $eventName = "${{ github.event_name }}"
+          if ($eventName -eq 'workflow_dispatch') {
+            $version = "${{ github.event.inputs.version }}".Trim()
+          } elseif ("${{ github.ref_type }}" -eq 'tag') {
+            $version = "${{ github.ref_name }}".Trim()
+          } else {
+            $version = (Get-Content '.github/release-version.txt' -Raw).Trim()
+          }
+
+          if ($version -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Invalid release version '$version'. Expected vMAJOR.MINOR.PATCH."
+          }
+
+          $package = Get-Content 'package.json' -Raw | ConvertFrom-Json
+          $committedVersion = "v$($package.version)"
+          if ($committedVersion -ne $version) {
+            throw "Release version $version does not match committed package version $committedVersion."
+          }
+
+          $notesPath = "RELEASE_NOTES_V$($package.version).md"
+          if (!(Test-Path $notesPath)) {
+            throw "Missing release notes: $notesPath"
+          }
+
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Release gate accepted $version"
+
       - name: Verify cross-repository release credential
         shell: powershell
         env:
@@ -31,9 +67,6 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:RELEASE_TOKEN)) {
             throw 'Missing SONKUPIK_STUDIO_RELEASE_TOKEN. Add a fine-grained token with Contents: Read and write access to masarray/sonkupik-studio.'
           }
-
-      - name: Checkout application source
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
