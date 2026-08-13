@@ -14,7 +14,7 @@ StudioPanel {
     readonly property real leftPad: 42
     readonly property real rightPad: 16
     readonly property real topPad: 20
-    readonly property real dockHeight: 106
+    readonly property real dockHeight: 96
     readonly property real plotBottom: Math.max(topPad + 150, graph.height - dockHeight)
     readonly property var colors: ["#F0B928", "#69AEEA", "#A58AE8", "#57D49A", "#F07A85", "#5EDDD4", "#D8C15B"]
     implicitHeight: 430
@@ -135,15 +135,14 @@ StudioPanel {
             activeFocusOnTab: true
 
             Rectangle { anchors.fill:parent; gradient:Gradient { GradientStop{position:0;color:"#0A0E12"} GradientStop{position:0.55;color:"#070A0D"} GradientStop{position:1;color:"#050709"} } }
-            Rectangle { x:0;y:root.plotBottom+23;width:parent.width;height:parent.height-y;color:"#D90A0E12"; Rectangle{anchors.top:parent.top;width:parent.width;height:1;color:Theme.borderSoft} }
 
             Repeater {
                 model:[20,30,50,70,100,200,500,1000,2000,5000,10000,20000]
                 delegate: Rectangle {
                     required property var modelData
-                    x:root.xFor(modelData);y:root.topPad;width:1;height:root.plotBottom-root.topPad
-                    color:modelData===1000?"#34414B":"#1B242B";opacity:modelData===1000?0.85:0.62
-                    Text { anchors.top:parent.bottom;anchors.topMargin:6;anchors.horizontalCenter:parent.horizontalCenter;text:modelData>=1000?(modelData/1000)+"k":modelData;color:Theme.textFaint;font.family:Theme.fontFamily;font.pixelSize:8 }
+                    x:root.xFor(modelData);y:root.topPad;width:1;height:graph.height-root.topPad-8
+                    color:modelData===1000?"#34414B":"#1B242B";opacity:modelData===1000?0.70:0.46
+                    Text { y:root.plotBottom-root.topPad+6;anchors.horizontalCenter:parent.horizontalCenter;text:modelData>=1000?(modelData/1000)+"k":modelData;color:Theme.textFaint;font.family:Theme.fontFamily;font.pixelSize:8 }
                 }
             }
             Repeater {
@@ -151,7 +150,7 @@ StudioPanel {
                 delegate: Rectangle {
                     required property var modelData
                     x:root.leftPad;y:root.yFor(modelData);width:graph.width-root.leftPad-root.rightPad;height:modelData===0?1.5:1
-                    color:modelData===0?"#60727D":"#1A2229";opacity:modelData===0?0.78:0.58
+                    color:modelData===0?"#60727D":"#1A2229";opacity:modelData===0?0.72:0.50
                     Text { anchors.right:parent.left;anchors.rightMargin:7;anchors.verticalCenter:parent.verticalCenter;text:modelData>0?"+"+modelData:modelData;color:Theme.textFaint;font.family:Theme.fontFamily;font.pixelSize:8 }
                 }
             }
@@ -167,10 +166,10 @@ StudioPanel {
                     c.beginPath()
                     for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.totalDb(f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}
                     c.lineTo(width-root.rightPad,zero);c.lineTo(root.leftPad,zero);c.closePath()
-                    var fill=c.createLinearGradient(0,root.topPad,0,root.plotBottom);fill.addColorStop(0,"rgba(94,221,212,0.16)");fill.addColorStop(0.52,"rgba(94,221,212,0.035)");fill.addColorStop(1,"rgba(240,185,40,0.025)");c.fillStyle=fill;c.fill()
-                    for(var b=0;b<root.bands.count;++b){var band=root.bands.get(b);if(Math.abs(band.gain)<0.05)continue;c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.bandDb(band,f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=b===root.selectedIndex?0.82:0.24;c.lineWidth=b===root.selectedIndex?1.7:1;c.strokeStyle=root.colorFor(b);c.stroke()}
-                    c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.crossDb(f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=0.48;c.lineWidth=1.15;c.strokeStyle=Theme.amber.toString();c.stroke()
-                    c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.totalDb(f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=0.92;c.lineWidth=5.8;c.strokeStyle="#020405";c.stroke();c.globalAlpha=0.13;c.lineWidth=7.6;c.strokeStyle=Theme.accent.toString();c.stroke();c.globalAlpha=1;c.lineWidth=2.25;var st=c.createLinearGradient(root.leftPad,0,width-root.rightPad,0);st.addColorStop(0,Theme.accent.toString());st.addColorStop(0.58,"#B8EEE5");st.addColorStop(0.8,Theme.amber.toString());st.addColorStop(1,Theme.accent.toString());c.strokeStyle=st;c.stroke();c.globalAlpha=1
+                    var fill=c.createLinearGradient(0,root.topPad,0,root.plotBottom);fill.addColorStop(0,"rgba(94,221,212,0.09)");fill.addColorStop(0.52,"rgba(94,221,212,0.018)");fill.addColorStop(1,"rgba(240,185,40,0.012)");c.fillStyle=fill;c.fill()
+                    for(var b=0;b<root.bands.count;++b){var band=root.bands.get(b);if(Math.abs(band.gain)<0.05)continue;c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.bandDb(band,f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=b===root.selectedIndex?0.72:0.18;c.lineWidth=b===root.selectedIndex?1.55:0.9;c.strokeStyle=root.colorFor(b);c.stroke()}
+                    c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.crossDb(f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=0.30;c.lineWidth=0.95;c.strokeStyle="#AA9460";c.stroke()
+                    c.beginPath();for(i=0;i<=n;++i){t=i/n;f=root.freq(t);x=root.leftPad+t*(width-root.leftPad-root.rightPad);y=root.yFor(root.totalDb(f));if(i===0)c.moveTo(x,y);else c.lineTo(x,y)}c.globalAlpha=0.82;c.lineWidth=4.4;c.strokeStyle="#020405";c.stroke();c.globalAlpha=0.055;c.lineWidth=6.3;c.strokeStyle=Theme.accent.toString();c.stroke();c.globalAlpha=0.94;c.lineWidth=1.8;var st=c.createLinearGradient(root.leftPad,0,width-root.rightPad,0);st.addColorStop(0,Theme.accent.toString());st.addColorStop(0.62,"#8EDAD4");st.addColorStop(0.84,Theme.amber.toString());st.addColorStop(1,Theme.accent.toString());c.strokeStyle=st;c.stroke();c.globalAlpha=1
                 }
             }
 
@@ -178,16 +177,16 @@ StudioPanel {
 
             Item {
                 x:root.xFor(root.bands.hpfHz)-10;y:root.topPad;width:20;height:root.plotBottom-root.topPad
-                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;width:1;height:parent.height;color:Theme.amber;opacity:0.35 }
+                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;width:1;height:parent.height;color:Theme.amber;opacity:0.24 }
                 Text { anchors.left:parent.horizontalCenter;anchors.leftMargin:8;y:4;text:"HP "+root.fmtF(root.bands.hpfHz)+" Hz";color:Theme.amber;font.family:Theme.fontFamily;font.pixelSize:8;font.weight:Font.DemiBold }
-                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;y:root.yFor(0)-root.topPad-9;width:18;height:18;radius:9;color:Theme.amber;border.width:2;border.color:"#241C06";Text{anchors.centerIn:parent;text:"HP";color:"#171204";font.family:Theme.fontFamily;font.pixelSize:7;font.weight:Font.Bold} }
+                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;y:root.yFor(0)-root.topPad-8;width:16;height:16;radius:8;color:"#17140B";border.width:1;border.color:Theme.amber;Text{anchors.centerIn:parent;text:"HP";color:Theme.amber;font.family:Theme.fontFamily;font.pixelSize:7;font.weight:Font.Bold} }
                 MouseArea { anchors.fill:parent;cursorShape:Qt.SizeHorCursor;onPositionChanged:function(e){if(pressed){var p=mapToItem(graph,e.x,e.y);root.bands.setHpfHz(root.freqForX(p.x))}} }
             }
             Item {
                 x:root.xFor(root.bands.lpfHz)-10;y:root.topPad;width:20;height:root.plotBottom-root.topPad
-                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;width:1;height:parent.height;color:Theme.amber;opacity:0.35 }
+                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;width:1;height:parent.height;color:Theme.amber;opacity:0.24 }
                 Text { anchors.right:parent.horizontalCenter;anchors.rightMargin:8;y:4;text:"LP "+root.fmtF(root.bands.lpfHz)+" Hz";color:Theme.amber;font.family:Theme.fontFamily;font.pixelSize:8;font.weight:Font.DemiBold }
-                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;y:root.yFor(0)-root.topPad-9;width:18;height:18;radius:9;color:Theme.amber;border.width:2;border.color:"#241C06";Text{anchors.centerIn:parent;text:"LP";color:"#171204";font.family:Theme.fontFamily;font.pixelSize:7;font.weight:Font.Bold} }
+                Rectangle { anchors.horizontalCenter:parent.horizontalCenter;y:root.yFor(0)-root.topPad-8;width:16;height:16;radius:8;color:"#17140B";border.width:1;border.color:Theme.amber;Text{anchors.centerIn:parent;text:"LP";color:Theme.amber;font.family:Theme.fontFamily;font.pixelSize:7;font.weight:Font.Bold} }
                 MouseArea { anchors.fill:parent;cursorShape:Qt.SizeHorCursor;onPositionChanged:function(e){if(pressed){var p=mapToItem(graph,e.x,e.y);root.bands.setLpfHz(root.freqForX(p.x))}} }
             }
 
@@ -200,9 +199,16 @@ StudioPanel {
                     required property real gain
                     required property real q
                     required property string typeName
-                    width:index===root.selectedIndex?27:22;height:width;x:root.xFor(freq)-width/2;y:root.yFor(gain)-height/2
-                    Rectangle { anchors.centerIn:parent;width:parent.width+(index===root.selectedIndex?12:8);height:width;radius:width/2;color:root.colorFor(index);opacity:index===root.selectedIndex?0.16:0.08 }
-                    Rectangle { anchors.fill:parent;radius:width/2;color:index===root.selectedIndex?root.colorFor(index):"#15120A";border.width:index===root.selectedIndex?2:1;border.color:index===root.selectedIndex?"#F5FFFF":root.colorFor(index);Text{anchors.centerIn:parent;text:index+1;color:index===root.selectedIndex?"#07100F":root.colorFor(index);font.family:Theme.fontFamily;font.pixelSize:9;font.weight:Font.Bold} }
+                    width:index===root.selectedIndex?23:19;height:width;x:root.xFor(freq)-width/2;y:root.yFor(gain)-height/2
+                    Rectangle { anchors.centerIn:parent;width:parent.width+(index===root.selectedIndex?8:6);height:width;radius:width/2;color:root.colorFor(index);opacity:index===root.selectedIndex?0.12:0.045 }
+                    Rectangle {
+                        anchors.fill:parent
+                        radius:width/2
+                        color:index===root.selectedIndex?"#11181B":"#12100B"
+                        border.width:index===root.selectedIndex?2:1
+                        border.color:root.colorFor(index)
+                        Text{anchors.centerIn:parent;text:index+1;color:root.colorFor(index);font.family:Theme.fontFamily;font.pixelSize:9;font.weight:Font.Bold}
+                    }
                     MouseArea {
                         property real lx:0;property real ly:0
                         anchors.fill:parent;anchors.margins:-9;cursorShape:Qt.SizeAllCursor
@@ -213,6 +219,16 @@ StudioPanel {
                 }
             }
 
+            Rectangle {
+                width: inspector.width + 12
+                height: inspector.height + 12
+                x: inspector.x - 6
+                y: inspector.y + 4
+                radius: inspector.radius + 4
+                color: "#52000000"
+                opacity: 0.70
+            }
+
             BandInspector {
                 id: inspector
                 bandModel: root.bands
@@ -221,10 +237,10 @@ StudioPanel {
                 gain: root.selectedGain
                 q: root.selectedQ
                 accentColor: root.colorFor(root.selectedIndex)
-                width: Math.min(548,graph.width-36)
-                height: 74
+                width: Math.min(516,graph.width-36)
+                height: 64
                 x: root.clamp(root.xFor(root.selectedFreq)-width/2,18,graph.width-width-18)
-                y: graph.height-height-8
+                y: graph.height-height-14
                 Behavior on x { SmoothedAnimation { velocity:1800 } }
                 onFrequencyEdited:function(v){root.setSelectedFrequency(v)}
                 onGainEdited:function(v){root.setSelectedGain(v)}
@@ -235,7 +251,7 @@ StudioPanel {
 
         RowLayout {
             Layout.fillWidth:true
-            Layout.preferredHeight:58
+            Layout.preferredHeight:50
             spacing:5
             Repeater {
                 model:bands
@@ -245,8 +261,20 @@ StudioPanel {
                     required property real gain
                     required property real q
                     required property string typeName
-                    Layout.fillWidth:true;Layout.preferredHeight:50;radius:6;color:index===root.selectedIndex?Theme.accentFaint:"#0B1014";border.width:1;border.color:index===root.selectedIndex?root.colorFor(index):Theme.borderSoft
-                    Column { anchors.fill:parent;anchors.margins:6;spacing:1;Row{spacing:4;Text{text:"B"+(index+1);color:index===root.selectedIndex?root.colorFor(index):Theme.textDim;font.family:Theme.fontFamily;font.pixelSize:8;font.weight:Font.Bold}Text{text:typeName==="LOW SHELF"?"LS":typeName==="HIGH SHELF"?"HS":"P";color:Theme.textFaint;font.family:Theme.fontFamily;font.pixelSize:8}}Text{text:root.fmtF(freq);color:Theme.amber;font.family:Theme.fontFamily;font.pixelSize:Theme.textXS;font.weight:Font.Bold}Text{text:(gain>0?"+":"")+gain.toFixed(1)+" dB";color:Theme.textSoft;font.family:Theme.fontFamily;font.pixelSize:8} }
+                    Layout.fillWidth:true
+                    Layout.preferredHeight:42
+                    radius:5
+                    color:index===root.selectedIndex?"#141D20":"#080D11"
+                    border.width:index===root.selectedIndex?1:0
+                    border.color:root.colorFor(index)
+                    Column {
+                        anchors.fill:parent
+                        anchors.margins:6
+                        spacing:1
+                        Row{spacing:4;Text{text:"B"+(index+1);color:index===root.selectedIndex?root.colorFor(index):Theme.textDim;font.family:Theme.fontFamily;font.pixelSize:8;font.weight:Font.Bold}Text{text:typeName==="LOW SHELF"?"LS":typeName==="HIGH SHELF"?"HS":"P";color:Theme.textFaint;font.family:Theme.fontFamily;font.pixelSize:8}}
+                        Text{text:root.fmtF(freq);color:index===root.selectedIndex?Theme.amber:Theme.textSoft;font.family:Theme.fontFamily;font.pixelSize:Theme.textXS;font.weight:Font.DemiBold}
+                        Text{text:(gain>0?"+":"")+gain.toFixed(1)+" dB";color:Theme.textDim;font.family:Theme.fontFamily;font.pixelSize:8}
+                    }
                     MouseArea { anchors.fill:parent;cursorShape:Qt.PointingHandCursor;onClicked:root.selectBand(index) }
                 }
             }

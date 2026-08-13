@@ -140,7 +140,7 @@ ApplicationWindow {
                     Text { anchors.centerIn: parent; text: "OFFLINE"; color: Theme.amber; font.family: Theme.fontFamily; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.7 }
                 }
                 SoftButton { Layout.preferredWidth: 74; text: "IMPORT"; iconName: "upload"; compact: true }
-                SoftButton { Layout.preferredWidth: 74; text: "EXPORT"; iconName: "download"; compact: true; checked: true }
+                SoftButton { Layout.preferredWidth: 74; text: "EXPORT"; iconName: "download"; compact: true }
             }
         }
 
@@ -297,14 +297,31 @@ ApplicationWindow {
                     Layout.minimumHeight: root.lowerRackHeight
                     Layout.maximumHeight: root.lowerRackHeight
                     spacing: 10
-                    MusicInputPanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 500 }
-                    MusicTonePanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 340 }
-                    FilterPanel { engine: root.studioEngine; Layout.preferredWidth: 224; Layout.fillHeight: true }
+                    MusicInputPanel {
+                        engine: root.studioEngine
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: 455
+                        Layout.minimumWidth: 400
+                    }
+                    MusicTonePanel {
+                        engine: root.studioEngine
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: 350
+                        Layout.minimumWidth: 310
+                    }
+                    FilterPanel {
+                        engine: root.studioEngine
+                        Layout.preferredWidth: 236
+                        Layout.minimumWidth: 228
+                        Layout.fillHeight: true
+                    }
                     MasterStripPanel {
                         engine: root.studioEngine
-                        Layout.preferredWidth: 176
-                        Layout.minimumWidth: 164
-                        Layout.maximumWidth: 190
+                        Layout.preferredWidth: 212
+                        Layout.minimumWidth: 202
+                        Layout.maximumWidth: 226
                         Layout.fillHeight: true
                     }
                 }
