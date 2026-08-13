@@ -70,40 +70,59 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
 
                 Rectangle {
-                    Layout.preferredWidth: 166
+                    Layout.preferredWidth: 148
                     Layout.preferredHeight: 36
                     radius: 8
                     border.width: 1
-                    border.color: "#26313A"
+                    border.color: "#2D3943"
                     gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#171F26" }
-                        GradientStop { position: 1.0; color: "#080C10" }
+                        GradientStop { position: 0.0; color: "#17212A" }
+                        GradientStop { position: 0.34; color: "#10171D" }
+                        GradientStop { position: 1.0; color: "#070B0F" }
                     }
-                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 2; height: 1; color: "#FFFFFF"; opacity: 0.06 }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        radius: parent.radius + 3
+                        color: "#000000"
+                        opacity: 0.18
+                        z: -3
+                    }
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 4
+                        height: 1
+                        color: "#FFFFFF"
+                        opacity: 0.08
+                    }
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: 4
-                        spacing: 4
-                        SoftButton { Layout.preferredWidth: 29; Layout.fillHeight: true; iconName: "skip-back"; iconOnly: true; iconFilled: true; compact: true }
+                        spacing: 3
+                        SoftButton { Layout.preferredWidth: 27; Layout.fillHeight: true; transport: true; iconName: "skip-back"; iconOnly: true; iconFilled: true }
                         SoftButton {
-                            Layout.preferredWidth: 33
+                            Layout.preferredWidth: 31
                             Layout.fillHeight: true
-                            iconName: "play"
+                            transport: true
+                            iconName: root.transportPlaying ? "pause" : "play"
                             iconOnly: true
                             iconFilled: true
-                            compact: true
                             neonAccent: true
                             checked: root.transportPlaying
                             onClicked: root.transportPlaying = !root.transportPlaying
                         }
-                        SoftButton { Layout.preferredWidth: 29; Layout.fillHeight: true; iconName: "skip-forward"; iconOnly: true; iconFilled: true; compact: true }
-                        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.borderSoft }
+                        SoftButton { Layout.preferredWidth: 27; Layout.fillHeight: true; transport: true; iconName: "skip-forward"; iconOnly: true; iconFilled: true }
+                        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: "#34414B" }
                         SoftButton {
-                            Layout.preferredWidth: 29
+                            Layout.preferredWidth: 27
                             Layout.fillHeight: true
+                            transport: true
                             iconName: "volume-x"
                             iconOnly: true
-                            compact: true
+                            accentIcon: !root.transportMuted
                             checked: root.transportMuted
                             danger: root.transportMuted
                             onClicked: root.transportMuted = !root.transportMuted
@@ -117,7 +136,9 @@ ApplicationWindow {
                     radius: 6
                     color: Theme.recessed
                     border.width: 1
-                    border.color: Theme.borderSoft
+                    border.color: "#3D351A"
+                    Rectangle { anchors.fill: parent; anchors.margins: -3; radius: parent.radius + 3; color: Theme.amber; opacity: 0.025; z: -2 }
+                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.leftMargin: 5; anchors.rightMargin: 5; height: 1; color: Theme.amber; opacity: 0.18 }
                     Text { anchors.centerIn: parent; text: "DEFAULT FLAT"; color: Theme.amber; font.family: Theme.fontFamily; font.pixelSize: Theme.textS; font.weight: Font.Bold; font.letterSpacing: 0.35 }
                 }
 
