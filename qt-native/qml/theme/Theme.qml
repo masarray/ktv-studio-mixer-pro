@@ -2,24 +2,26 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-    readonly property string fontFamily: "Plus Jakarta Sans"
+    readonly property string fontFamily: "Segoe UI Variable Text"
 
-    readonly property color bg: "#070A0D"
-    readonly property color chassis: "#0B0F13"
-    readonly property color bgRaised: "#0F1419"
-    readonly property color panel: "#121820"
-    readonly property color panelRaised: "#182029"
-    readonly property color recessed: "#070A0D"
-    readonly property color control: "#1A222B"
-    readonly property color controlRaised: "#222C36"
-    readonly property color border: "#2A3540"
-    readonly property color borderSoft: "#1B242D"
-    readonly property color highlight: "#34414C"
+    readonly property color bg: "#080C10"
+    readonly property color chassis: "#0D1217"
+    readonly property color bgRaised: "#11171D"
+    readonly property color panel: "#141B22"
+    readonly property color panelRaised: "#192129"
+    readonly property color recessed: "#06090C"
+    readonly property color control: "#182027"
+    readonly property color controlRaised: "#222C35"
+    readonly property color controlHover: "#27323C"
+    readonly property color border: "#2B3640"
+    readonly property color borderSoft: "#1D262E"
+    readonly property color highlight: "#43515C"
+    readonly property color focus: "#8CF4EC"
 
     readonly property color text: "#F4F7F9"
-    readonly property color textSoft: "#C2CBD3"
-    readonly property color textDim: "#778490"
-    readonly property color textFaint: "#505D68"
+    readonly property color textSoft: "#C9D1D8"
+    readonly property color textDim: "#87939E"
+    readonly property color textFaint: "#5B6873"
 
     readonly property color accent: "#5EDDD4"
     readonly property color accentSoft: "#405EDDD4"
@@ -34,7 +36,7 @@ QtObject {
 
     readonly property int radiusSmall: 5
     readonly property int radius: 8
-    readonly property int radiusLarge: 11
+    readonly property int radiusLarge: 10
 
     readonly property int gapXS: 4
     readonly property int gapS: 7

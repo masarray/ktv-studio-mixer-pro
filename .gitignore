@@ -23,6 +23,11 @@ coverage/
 .eslintcache
 *.tsbuildinfo
 
+# Qt/CMake local builds and visual audit captures
+qt-native/build*/
+qt-native/portable/
+audit/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

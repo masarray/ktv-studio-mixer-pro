@@ -1,30 +1,21 @@
 import QtQuick
 import QtQuick.Layouts
 
-Rectangle {
+StudioPanel {
     id: root
+    required property var bandModel
 
     property int selectedIndex: 0
-    property real selectedFreq: 72
-    property real selectedGain: 2.6
-    property real selectedQ: 0.70
+    property real selectedFreq: 80
+    property real selectedGain: 0.0
+    property real selectedQ: 1.00
+    property real hpfFreq: 20
+    property real lpfFreq: 20000
 
     implicitHeight: 430
-    radius: Theme.radiusLarge
-    color: Theme.panel
-    border.width: 1
-    border.color: Theme.border
+    accentTop: true
 
-    ListModel {
-        id: bands
-        ListElement { freq: 72; gain: 2.6; q: 0.70; typeName: "LOW SHELF" }
-        ListElement { freq: 125; gain: 1.1; q: 0.90; typeName: "BELL" }
-        ListElement { freq: 310; gain: -1.3; q: 1.25; typeName: "BELL" }
-        ListElement { freq: 720; gain: -0.4; q: 1.05; typeName: "BELL" }
-        ListElement { freq: 2200; gain: -1.1; q: 1.00; typeName: "BELL" }
-        ListElement { freq: 6200; gain: 0.7; q: 0.78; typeName: "BELL" }
-        ListElement { freq: 12500; gain: 1.8; q: 0.72; typeName: "HIGH SHELF" }
-    }
+    readonly property var bands: root.bandModel
 
     function clamp(v,a,b) { return Math.max(a,Math.min(b,v)) }
     function freqToNorm(f) { return Math.log(f / 20) / Math.log(20000 / 20) }
@@ -49,10 +40,22 @@ Rectangle {
         selectedQ = b.q
     }
     function updateSelected() {
-        bands.setProperty(selectedIndex,"freq",selectedFreq)
-        bands.setProperty(selectedIndex,"gain",selectedGain)
-        bands.setProperty(selectedIndex,"q",selectedQ)
+        bands.setBand(selectedIndex, selectedFreq, selectedGain, selectedQ)
         curve.requestPaint()
+    }
+    function setSelectedFrequency(v) { selectedFreq = clamp(v, 20, 20000); updateSelected() }
+    function setSelectedGain(v) { selectedGain = clamp(v, -24, 24); updateSelected() }
+    function setSelectedQValue(v) { selectedQ = clamp(v, 0.1, 30); updateSelected() }
+    function resetSelected() { selectedGain = 0; selectedQ = 1; updateSelected() }
+    function resetAll() {
+        bands.resetAll()
+        selectBand(0)
+        curve.requestPaint()
+    }
+    function adjustSelectedQ(direction, fine) {
+        var increment = fine ? 0.02 : 0.1
+        selectedQ = Math.round(clamp(selectedQ + direction * increment, 0.1, 30) * 100) / 100
+        updateSelected()
     }
     function freqLabel(f) { return f >= 1000 ? (f/1000).toFixed(f>=10000?1:2)+"k" : Math.round(f).toString() }
 
@@ -82,7 +85,7 @@ Rectangle {
                 font.letterSpacing: 0.65
             }
             Item { Layout.fillWidth: true }
-            SoftButton { text: "FLAT"; compact: true }
+            SoftButton { text: "FLAT"; compact: true; onClicked: root.resetAll() }
             SoftButton { text: "A/B"; compact: true }
         }
 
@@ -96,6 +99,22 @@ Rectangle {
             border.width: 1
             border.color: Theme.borderSoft
             clip: true
+            activeFocusOnTab: true
+
+            Keys.onPressed: function(event) {
+                var fine = (event.modifiers & Qt.ShiftModifier) !== 0
+                if ((event.modifiers & Qt.ControlModifier) !== 0 && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                    root.adjustSelectedQ(event.key === Qt.Key_Up ? 1 : -1, fine)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+                    root.setSelectedGain(root.selectedGain + (event.key === Qt.Key_Up ? 1 : -1) * (fine ? 0.1 : 0.5))
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+                    var factor = fine ? 1.01 : 1.06
+                    root.setSelectedFrequency(root.selectedFreq * (event.key === Qt.Key_Right ? factor : 1 / factor))
+                    event.accepted = true
+                }
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -203,6 +222,15 @@ Rectangle {
                 }
             }
 
+            WheelHandler {
+                target: null
+                onWheel: function(event) {
+                    graph.forceActiveFocus()
+                    root.adjustSelectedQ(event.angleDelta.y > 0 ? 1 : -1, (event.modifiers & Qt.ShiftModifier) !== 0)
+                    event.accepted = true
+                }
+            }
+
             Repeater {
                 model: bands
                 delegate: Item {
@@ -241,17 +269,42 @@ Rectangle {
                         }
                     }
                     MouseArea {
+                        property real lastX: 0
+                        property real lastY: 0
                         anchors.fill: parent
                         anchors.margins: -9
                         cursorShape: Qt.SizeAllCursor
-                        onPressed: root.selectBand(index)
+                        onPressed: function(e) {
+                            root.selectBand(index)
+                            graph.forceActiveFocus()
+                            lastX = e.x
+                            lastY = e.y
+                        }
                         onPositionChanged: function(e) {
                             if(!pressed)return
+                            var fine = (e.modifiers & Qt.ShiftModifier) !== 0
+                            if ((e.modifiers & Qt.ControlModifier) !== 0) {
+                                var dy = e.y - lastY
+                                lastY = e.y
+                                var nextQ = root.clamp(q * Math.exp(-dy * (fine ? 0.003 : 0.012)), 0.1, 30)
+                                bands.setBand(index, freq, gain, nextQ)
+                                if (index === root.selectedIndex) root.selectedQ = nextQ
+                                curve.requestPaint()
+                                return
+                            }
                             var p=mapToItem(graph,e.x,e.y)
+                            if (fine) {
+                                var currentX = root.freqToNorm(freq) * graph.width
+                                var currentY = root.gainToNorm(gain) * graph.height
+                                p.x = currentX + (e.x - lastX) * 0.25
+                                p.y = currentY + (e.y - lastY) * 0.25
+                                lastX = e.x
+                                lastY = e.y
+                            }
                             var f=root.normToFreq(p.x/graph.width)
                             var g=root.normToGain(p.y/graph.height)
-                            bands.setProperty(index,"freq",f)
-                            bands.setProperty(index,"gain",g)
+                            if (!fine && Math.abs(g) < 0.3) g = 0
+                            bands.setBand(index, f, g, q)
                             if(index===root.selectedIndex){root.selectedFreq=f;root.selectedGain=g}
                             curve.requestPaint()
                         }
@@ -264,11 +317,23 @@ Rectangle {
                 width: 286
                 height: 68
                 x: root.clamp(root.freqToNorm(root.selectedFreq)*graph.width-width/2, 14, graph.width-width-14)
-                y: root.clamp(root.gainToNorm(root.selectedGain)*graph.height+30, 62, graph.height-height-18)
+                y: graph.height - height - 18
                 radius: 7
                 color: "#E912171D"
                 border.width: 1
                 border.color: "#40505C"
+                Behavior on x { SmoothedAnimation { velocity: 1500 } }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    height: 1
+                    color: Theme.accent
+                    opacity: 0.34
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -290,7 +355,7 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 74
+            Layout.preferredHeight: 58
             spacing: 8
 
             RowLayout {
@@ -326,11 +391,6 @@ Rectangle {
                 }
             }
 
-            Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color:Theme.borderSoft }
-
-            StudioKnob { Layout.preferredWidth: 70; compact:true; title:"FREQ"; value:root.selectedFreq; from:20; to:20000; defaultValue:1000; logarithmic:true; decimals:0; unit:"Hz"; accentColor:Theme.amber; onValueEdited:function(v){root.selectedFreq=v;root.updateSelected()} }
-            StudioKnob { Layout.preferredWidth: 70; compact:true; title:"GAIN"; value:root.selectedGain; from:-24; to:24; defaultValue:0; decimals:1; unit:"dB"; accentColor:Theme.accent; onValueEdited:function(v){root.selectedGain=v;root.updateSelected()} }
-            StudioKnob { Layout.preferredWidth: 70; compact:true; title:"Q"; value:root.selectedQ; from:0.2; to:10; defaultValue:1; decimals:2; unit:""; accentColor:Theme.violet; onValueEdited:function(v){root.selectedQ=v;root.updateSelected()} }
         }
     }
 }

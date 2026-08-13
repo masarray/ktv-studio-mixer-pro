@@ -15,7 +15,7 @@ Item {
         SoftButton {
             Layout.preferredWidth: 34
             Layout.preferredHeight: 34
-            text: "‹"
+            text: "<"
             onClicked: { root.key = Math.max(-6, root.key - 1); root.keyEdited(root.key) }
         }
 
@@ -73,7 +73,7 @@ Item {
         SoftButton {
             Layout.preferredWidth: 34
             Layout.preferredHeight: 34
-            text: "›"
+            text: ">"
             onClicked: { root.key = Math.min(6, root.key + 1); root.keyEdited(root.key) }
         }
     }

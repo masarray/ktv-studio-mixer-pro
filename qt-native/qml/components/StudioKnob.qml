@@ -9,6 +9,7 @@ Item {
     property real to: 12.0
     property real defaultValue: 0.0
     property int decimals: 1
+    property real step: 0
     property string unit: "dB"
     property bool logarithmic: false
     property bool compact: false
@@ -20,6 +21,7 @@ Item {
 
     property real previewValue: value
     property bool dragging: false
+    property bool hovered: pointer.containsMouse
     property real pressY: 0
     property real pressNorm: 0
 
@@ -44,6 +46,35 @@ Item {
         if (logarithmic && unit === "Hz" && v >= 1000)
             return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + "k"
         return Number(v).toFixed(decimals)
+    }
+    function effectiveStep(fine) {
+        var base = step > 0 ? step : Math.max((to - from) / 100, Math.pow(10, -decimals))
+        return fine ? base / 10 : base
+    }
+    function quantize(v, fine) {
+        var s = effectiveStep(fine)
+        var next = clamp(Math.round(v / s) * s, from, to)
+        return Number(next.toFixed(Math.max(decimals + 1, 3)))
+    }
+    function nudge(direction, fine) {
+        var next = quantize(value + direction * effectiveStep(fine), fine)
+        previewValue = next
+        valueEdited(next)
+    }
+
+    activeFocusOnTab: true
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Up || event.key === Qt.Key_Right) {
+            nudge(1, (event.modifiers & Qt.ShiftModifier) !== 0)
+            event.accepted = true
+        } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Left) {
+            nudge(-1, (event.modifiers & Qt.ShiftModifier) !== 0)
+            event.accepted = true
+        } else if (event.key === Qt.Key_Home) {
+            previewValue = defaultValue
+            valueEdited(defaultValue)
+            event.accepted = true
+        }
     }
 
     onValueChanged: if (!dragging) previewValue = value
@@ -77,7 +108,8 @@ Item {
             radius: width / 2
             color: "#080B0E"
             border.width: 1
-            border.color: "#26313A"
+            border.color: root.activeFocus ? Theme.focus : root.hovered ? Theme.highlight : "#26313A"
+            Behavior on border.color { ColorAnimation { duration: 80 } }
         }
 
         Canvas {
@@ -137,10 +169,12 @@ Item {
         }
 
         MouseArea {
+            id: pointer
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.SizeVerCursor
             onPressed: function(e) {
+                root.forceActiveFocus()
                 root.dragging = true
                 root.pressY = e.y
                 root.pressNorm = root.valueToNorm(root.value)
@@ -151,17 +185,18 @@ Item {
                 var fine = (e.modifiers & Qt.ShiftModifier) !== 0
                 var sensitivity = fine ? 420 : 145
                 var nextNorm = root.clamp(root.pressNorm + (root.pressY - e.y) / sensitivity, 0, 1)
-                root.previewValue = root.normToValue(nextNorm)
+                root.previewValue = root.quantize(root.normToValue(nextNorm), fine)
                 root.valueEdited(root.previewValue)
             }
             onReleased: root.dragging = false
             onCanceled: root.dragging = false
-            onDoubleClicked: root.valueEdited(root.defaultValue)
+            onDoubleClicked: {
+                root.previewValue = root.defaultValue
+                root.valueEdited(root.defaultValue)
+            }
             onWheel: function(e) {
-                var step = (e.modifiers & Qt.ShiftModifier) !== 0 ? 0.002 : 0.012
-                var nextNorm = root.clamp(root.valueToNorm(root.value) + (e.angleDelta.y > 0 ? step : -step), 0, 1)
-                root.previewValue = root.normToValue(nextNorm)
-                root.valueEdited(root.previewValue)
+                root.forceActiveFocus()
+                root.nudge(e.angleDelta.y > 0 ? 1 : -1, (e.modifiers & Qt.ShiftModifier) !== 0)
                 e.accepted = true
             }
         }
@@ -176,15 +211,27 @@ Item {
         radius: 4
         color: "#090D11"
         border.width: 1
-        border.color: root.dragging ? root.accentColor : Theme.borderSoft
+        border.color: root.dragging ? root.accentColor : root.activeFocus ? Theme.focus : root.hovered ? Theme.highlight : Theme.borderSoft
 
         Text {
             anchors.centerIn: parent
             text: root.formatValue(root.previewValue) + (root.unit.length ? " " + root.unit : "")
-            color: root.dragging ? Theme.text : Theme.textSoft
+            color: root.dragging || root.activeFocus ? Theme.text : Theme.textSoft
             font.family: Theme.fontFamily
             font.pixelSize: root.compact ? Theme.textXS : Theme.textS
             font.weight: Font.DemiBold
         }
+    }
+
+    Text {
+        visible: root.hovered && !root.compact
+        anchors.top: parent.bottom
+        anchors.topMargin: 2
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: "WHEEL  ·  SHIFT FINE"
+        color: Theme.textFaint
+        font.family: Theme.fontFamily
+        font.pixelSize: 7
+        font.letterSpacing: 0.35
     }
 }

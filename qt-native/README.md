@@ -13,7 +13,7 @@ This folder is a **visual-first Qt 6 / QML prototype**. It intentionally does no
 
 ## Font
 
-The prototype uses **Plus Jakarta Sans** everywhere, including numeric readouts. Install Plus Jakarta Sans on the test PC before judging typography. The repository does not bundle a font binary at this stage.
+The prototype uses **Segoe UI Variable Text**, matching the current web product's Windows typography while avoiding a bundled font payload.
 
 ## Requirements
 
@@ -39,7 +39,18 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-The prototype opens with animated mock meters. PEQ nodes, knobs, faders and Music Key are interactive, but nothing is transmitted to hardware.
+The prototype opens on the Music workspace and follows the current web product's operator layout: PEQ and selected-band inspector above Music Input, Pitch/Tone, filters and Master Strip. Controls are interactive, but nothing is transmitted to hardware yet.
+
+Visible Music controls are backed by the native `StudioEngine` QObject. PEQ bands use a `QAbstractListModel`; faders, pitch/tone, crossover frequencies and filter-type selectors write canonical store-style paths through the engine's `stateEdited(path, value)` signal. This establishes the boundary for preset parsing and K500 transport wiring without coupling QML controls directly to device I/O.
+
+## Native control behavior
+
+- Point at a PEQ graph and scroll to adjust the selected band's Q. Hold Shift for fine steps.
+- Drag a PEQ node for frequency/gain; hold Shift for surgical movement.
+- Hold Ctrl while dragging a PEQ node vertically to adjust Q.
+- Scroll knobs, faders, value fields and sliders to change values; hold Shift for fine steps.
+- Use arrow keys after focusing a control. Home resets knobs, faders and value fields.
+- Double-click a knob, fader, value field or slider to reset it.
 
 ## Next phase after visual approval
 
