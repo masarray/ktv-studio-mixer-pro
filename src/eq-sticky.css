@@ -1,0 +1,18 @@
+.panel-inset:has(> .eq-floating-card) > svg {
+  height: calc(100% - 86px) !important;
+  bottom: auto !important;
+}
+.eq-floating-card,
+.eq-floating-card.below,
+.eq-floating-card.above {
+  top: auto !important;
+  bottom: 8px !important;
+  transform: translateX(-50%) !important;
+  width: min(430px, 48%) !important;
+  max-width: 430px !important;
+}
+.eq-floating-card::before,
+.eq-floating-card.below::before,
+.eq-floating-card.above::before {
+  display: none !important;
+}
