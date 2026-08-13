@@ -3,75 +3,78 @@ import QtQuick.Layouts
 
 Item {
     id: root
-    property int keyValue: 0
-    signal keyEdited(int semitone)
 
-    implicitHeight: 78
+    property int key: 0
+    signal keyEdited(int newKey)
+    implicitHeight: 72
 
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
-        spacing: 6
+        spacing: 7
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 22
-
-            Text {
-                text: "MUSIC KEY"
-                color: Theme.textSoft
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.textXS
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.55
-            }
-            Item { Layout.fillWidth: true }
-            Text {
-                text: root.keyValue === 0 ? "ORIGINAL" : (root.keyValue > 0 ? "+" : "") + root.keyValue + " SEMITONE"
-                color: root.keyValue === 0 ? Theme.textDim : Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: 9
-                font.weight: Font.DemiBold
-            }
+        SoftButton {
+            Layout.preferredWidth: 34
+            Layout.preferredHeight: 34
+            text: "‹"
+            onClicked: { root.key = Math.max(-6, root.key - 1); root.keyEdited(root.key) }
         }
 
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 3
+            Layout.preferredHeight: 52
+            radius: 7
+            color: "#06090C"
+            border.width: 1
+            border.color: Theme.borderSoft
 
-            Repeater {
-                model: 13
-                delegate: Rectangle {
-                    required property int index
-                    property int semitone: index - 6
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 34
-                    radius: 4
-                    color: root.keyValue === semitone ? Theme.accentSoft : keyMouse.containsMouse ? Theme.control : "#0B0F12"
-                    border.width: 1
-                    border.color: root.keyValue === semitone ? Theme.accent : keyMouse.containsMouse ? Theme.border : Theme.borderSoft
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 5
+                radius: 5
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: "#090D11" }
+                    GradientStop { position: 0.5; color: "#14130B" }
+                    GradientStop { position: 1.0; color: "#090D11" }
+                }
+            }
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: semitone === 0 ? "0" : semitone > 0 ? "+" + semitone : semitone
-                        color: root.keyValue === semitone ? Theme.text : Theme.textSoft
+            Row {
+                anchors.centerIn: parent
+                spacing: 12
+                Repeater {
+                    model: [-2, -1, 0, 1, 2]
+                    delegate: Text {
+                        required property var modelData
+                        text: modelData > 0 ? "♯" + modelData : modelData < 0 ? "♭" + Math.abs(modelData) : "0"
+                        color: root.key === modelData ? Theme.amber : modelData === 0 ? Theme.textSoft : Theme.textDim
+                        opacity: root.key === modelData ? 1 : 0.72
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
-                        font.weight: root.keyValue === semitone ? Font.Bold : Font.Medium
-                    }
-
-                    MouseArea {
-                        id: keyMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.keyValue = semitone
-                            root.keyEdited(semitone)
-                        }
+                        font.pixelSize: root.key === modelData ? 14 : 10
+                        font.weight: root.key === modelData ? Font.Bold : Font.Medium
+                        Behavior on color { ColorAnimation { duration: 90 } }
                     }
                 }
             }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 3
+                text: root.key === 0 ? "ORIGINAL" : root.key > 0 ? "KEY UP" : "KEY DOWN"
+                color: root.key === 0 ? Theme.accent : Theme.textDim
+                font.family: Theme.fontFamily
+                font.pixelSize: 8
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.7
+            }
+        }
+
+        SoftButton {
+            Layout.preferredWidth: 34
+            Layout.preferredHeight: 34
+            text: "›"
+            onClicked: { root.key = Math.min(6, root.key + 1); root.keyEdited(root.key) }
         }
     }
 }

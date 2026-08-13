@@ -4,39 +4,46 @@ import QtQuick
 QtObject {
     readonly property string fontFamily: "Plus Jakarta Sans"
 
-    readonly property color bg: "#080A0D"
-    readonly property color bgRaised: "#0D1014"
-    readonly property color panel: "#11151A"
-    readonly property color panelRaised: "#161B21"
-    readonly property color control: "#1A2027"
-    readonly property color border: "#28313A"
-    readonly property color borderSoft: "#1D242B"
+    readonly property color bg: "#070A0D"
+    readonly property color chassis: "#0B0F13"
+    readonly property color bgRaised: "#0F1419"
+    readonly property color panel: "#121820"
+    readonly property color panelRaised: "#182029"
+    readonly property color recessed: "#070A0D"
+    readonly property color control: "#1A222B"
+    readonly property color controlRaised: "#222C36"
+    readonly property color border: "#2A3540"
+    readonly property color borderSoft: "#1B242D"
+    readonly property color highlight: "#34414C"
 
-    readonly property color text: "#F2F5F7"
-    readonly property color textSoft: "#B5BEC7"
-    readonly property color textDim: "#77828D"
+    readonly property color text: "#F4F7F9"
+    readonly property color textSoft: "#C2CBD3"
+    readonly property color textDim: "#778490"
+    readonly property color textFaint: "#505D68"
 
-    readonly property color accent: "#65DDD4"
-    readonly property color accentSoft: "#3465DDD4"
-    readonly property color accentFaint: "#1465DDD4"
-    readonly property color blue: "#79B9F2"
-    readonly property color violet: "#A997F4"
-    readonly property color amber: "#E6C36A"
-    readonly property color red: "#F07878"
-    readonly property color green: "#6BD6A1"
+    readonly property color accent: "#5EDDD4"
+    readonly property color accentSoft: "#405EDDD4"
+    readonly property color accentFaint: "#185EDDD4"
+    readonly property color amber: "#F0B928"
+    readonly property color amberSoft: "#40F0B928"
+    readonly property color amberFaint: "#18F0B928"
+    readonly property color blue: "#69AEEA"
+    readonly property color violet: "#A58AE8"
+    readonly property color red: "#F36B6B"
+    readonly property color green: "#57D49A"
 
     readonly property int radiusSmall: 5
     readonly property int radius: 8
-    readonly property int radiusLarge: 12
+    readonly property int radiusLarge: 11
 
     readonly property int gapXS: 4
-    readonly property int gapS: 8
-    readonly property int gap: 12
-    readonly property int gapL: 18
+    readonly property int gapS: 7
+    readonly property int gap: 10
+    readonly property int gapL: 14
 
-    readonly property int textXS: 10
-    readonly property int textS: 11
-    readonly property int textM: 12
-    readonly property int textL: 14
-    readonly property int textXL: 18
+    readonly property int textXS: 9
+    readonly property int textS: 10
+    readonly property int textM: 11
+    readonly property int textL: 13
+    readonly property int textXL: 16
 }

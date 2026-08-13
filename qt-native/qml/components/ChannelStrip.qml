@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 
-Rectangle {
+Item {
     id: root
 
     property string channelName: "MUSIC"
@@ -12,20 +12,40 @@ Rectangle {
     property bool muted: false
     property bool selected: false
 
-    implicitWidth: 126
-    implicitHeight: 250
-    radius: Theme.radius
-    color: selected ? "#151C21" : Theme.bgRaised
-    border.width: 1
-    border.color: selected ? accentColor : Theme.borderSoft
+    implicitWidth: 132
+    implicitHeight: 260
 
-    Behavior on color { ColorAnimation { duration: 100 } }
-    Behavior on border.color { ColorAnimation { duration: 100 } }
+    Rectangle {
+        anchors.fill: parent
+        color: root.selected ? "#151D23" : "transparent"
+        radius: 7
+        opacity: root.selected ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 110 } }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 2
+        radius: 1
+        color: root.accentColor
+        opacity: root.selected ? 1 : 0.26
+    }
+
+    Rectangle {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: 1
+        color: Theme.borderSoft
+        opacity: 0.92
+    }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 8
-        spacing: 4
+        anchors.margins: 7
+        spacing: 3
 
         RowLayout {
             Layout.fillWidth: true
@@ -34,10 +54,9 @@ Rectangle {
 
             Rectangle {
                 width: 4
-                height: 12
+                height: 13
                 radius: 2
                 color: root.accentColor
-                opacity: root.selected ? 1 : 0.42
             }
 
             Text {
@@ -45,27 +64,27 @@ Rectangle {
                 text: root.channelName
                 color: root.selected ? Theme.text : Theme.textSoft
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.textXS
+                font.pixelSize: Theme.textS
                 font.weight: Font.DemiBold
+                font.letterSpacing: 0.4
                 elide: Text.ElideRight
-                font.letterSpacing: 0.45
             }
 
             Rectangle {
                 width: 5
                 height: 5
                 radius: 3
-                color: root.muted ? Theme.red : root.meterLevel > 0.02 ? Theme.green : Theme.textDim
-                opacity: root.muted ? 1 : 0.75
+                color: root.muted ? Theme.red : root.meterLevel > 0.02 ? Theme.green : Theme.textFaint
+                opacity: 0.85
             }
         }
 
         StudioKnob {
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 58
-            Layout.preferredHeight: 68
-            title: "TRIM"
+            Layout.preferredWidth: 72
+            Layout.preferredHeight: 78
             compact: true
+            title: "TRIM"
             value: root.trimValue
             from: -12
             to: 12
@@ -79,19 +98,20 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: 126
-            spacing: 7
+            Layout.minimumHeight: 130
+            spacing: 5
 
             Item { Layout.fillWidth: true }
 
             LevelMeter {
-                Layout.preferredWidth: 11
+                Layout.preferredWidth: 13
                 Layout.fillHeight: true
                 level: root.muted ? 0 : root.meterLevel
+                peak: Math.min(1, (root.muted ? 0 : root.meterLevel) + 0.05)
             }
 
             StudioFader {
-                Layout.preferredWidth: 52
+                Layout.preferredWidth: 64
                 Layout.fillHeight: true
                 value: root.faderValue
                 accentColor: root.accentColor
@@ -104,10 +124,10 @@ Rectangle {
 
         Rectangle {
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 62
-            Layout.preferredHeight: 24
-            radius: Theme.radiusSmall
-            color: root.selected ? Theme.accentFaint : "#0B0F12"
+            Layout.preferredWidth: 72
+            Layout.preferredHeight: 22
+            radius: 4
+            color: "#080C10"
             border.width: 1
             border.color: root.selected ? root.accentColor : Theme.borderSoft
 
@@ -123,8 +143,8 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 27
-            spacing: 5
+            Layout.preferredHeight: 25
+            spacing: 4
 
             SoftButton {
                 Layout.fillWidth: true
@@ -133,7 +153,6 @@ Rectangle {
                 checked: root.selected
                 onClicked: root.selected = !root.selected
             }
-
             SoftButton {
                 Layout.fillWidth: true
                 compact: true

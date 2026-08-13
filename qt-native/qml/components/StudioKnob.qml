@@ -13,11 +13,10 @@ Item {
     property bool logarithmic: false
     property bool compact: false
     property color accentColor: Theme.accent
-
     signal valueEdited(real newValue)
 
-    implicitWidth: compact ? 64 : 78
-    implicitHeight: compact ? 72 : 90
+    implicitWidth: compact ? 70 : 84
+    implicitHeight: compact ? 76 : 94
 
     property real previewValue: value
     property bool dragging: false
@@ -25,7 +24,6 @@ Item {
     property real pressNorm: 0
 
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)) }
-
     function valueToNorm(v) {
         if (logarithmic) {
             var safeFrom = Math.max(0.0001, from)
@@ -34,7 +32,6 @@ Item {
         }
         return clamp((v - from) / (to - from), 0, 1)
     }
-
     function normToValue(n) {
         n = clamp(n, 0, 1)
         if (logarithmic) {
@@ -43,7 +40,6 @@ Item {
         }
         return from + n * (to - from)
     }
-
     function formatValue(v) {
         if (logarithmic && unit === "Hz" && v >= 1000)
             return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + "k"
@@ -63,116 +59,132 @@ Item {
         font.family: Theme.fontFamily
         font.pixelSize: Theme.textXS
         font.weight: Font.DemiBold
-        font.letterSpacing: 0.55
+        font.letterSpacing: 0.6
     }
 
     Item {
         id: knobBox
-        width: root.compact ? 46 : 56
+        width: root.compact ? 48 : 58
         height: width
         anchors.top: titleLabel.bottom
         anchors.topMargin: root.compact ? 3 : 5
         anchors.horizontalCenter: parent.horizontalCenter
 
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width * 0.82
+            height: width
+            radius: width / 2
+            color: "#080B0E"
+            border.width: 1
+            border.color: "#26313A"
+        }
+
         Canvas {
             id: dial
             anchors.fill: parent
             antialiasing: true
-
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.reset()
                 var cx = width / 2
                 var cy = height / 2
-                var r = width * 0.40
+                var norm = root.valueToNorm(root.previewValue)
                 var start = Math.PI * 0.75
                 var sweep = Math.PI * 1.5
-                var norm = root.valueToNorm(root.previewValue)
                 var end = start + sweep
                 var activeEnd = start + sweep * norm
+                var arcR = width * 0.43
 
                 ctx.lineCap = "round"
-                ctx.lineWidth = root.compact ? 2.4 : 2.8
-                ctx.strokeStyle = Theme.border.toString()
-                ctx.beginPath()
-                ctx.arc(cx, cy, r, start, end, false)
-                ctx.stroke()
+                ctx.lineWidth = root.compact ? 2.1 : 2.6
+                ctx.strokeStyle = "#2A343E"
+                ctx.beginPath(); ctx.arc(cx, cy, arcR, start, end, false); ctx.stroke()
 
-                ctx.strokeStyle = root.enabled ? root.accentColor.toString() : Theme.textDim.toString()
-                ctx.beginPath()
-                ctx.arc(cx, cy, r, start, activeEnd, false)
-                ctx.stroke()
+                ctx.strokeStyle = root.accentColor.toString()
+                ctx.beginPath(); ctx.arc(cx, cy, arcR, start, activeEnd, false); ctx.stroke()
 
-                var capR = r * 0.72
-                var g = ctx.createRadialGradient(cx - capR * 0.25, cy - capR * 0.25, 1, cx, cy, capR)
-                g.addColorStop(0, "#303842")
-                g.addColorStop(0.48, "#20262D")
-                g.addColorStop(1, "#11161B")
+                for (var i = 0; i < 11; ++i) {
+                    var a = start + sweep * i / 10
+                    var r1 = arcR + 4
+                    var r2 = arcR + (i === 5 ? 7 : 6)
+                    ctx.strokeStyle = i === 5 ? "#73808A" : "#3A4650"
+                    ctx.lineWidth = 1
+                    ctx.beginPath()
+                    ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
+                    ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2)
+                    ctx.stroke()
+                }
+
+                var capR = width * 0.29
+                var g = ctx.createRadialGradient(cx - capR * 0.35, cy - capR * 0.42, 2, cx, cy, capR)
+                g.addColorStop(0, "#44505A")
+                g.addColorStop(0.22, "#2E3740")
+                g.addColorStop(0.72, "#171D23")
+                g.addColorStop(1, "#0E1318")
                 ctx.fillStyle = g
-                ctx.beginPath()
-                ctx.arc(cx, cy, capR, 0, Math.PI * 2)
-                ctx.fill()
-                ctx.strokeStyle = "#39434D"
-                ctx.lineWidth = 1
-                ctx.stroke()
+                ctx.beginPath(); ctx.arc(cx, cy, capR, 0, Math.PI * 2); ctx.fill()
+                ctx.strokeStyle = "#4B5864"; ctx.lineWidth = 1; ctx.stroke()
 
-                var indicatorAngle = activeEnd
-                var inner = capR * 0.23
-                var outer = capR * 0.72
-                ctx.strokeStyle = root.enabled ? "#F4F8F9" : "#6E7780"
-                ctx.lineWidth = 1.7
+                var a2 = activeEnd
+                ctx.strokeStyle = "#F4F7F9"
+                ctx.lineWidth = root.compact ? 1.6 : 1.8
                 ctx.beginPath()
-                ctx.moveTo(cx + Math.cos(indicatorAngle) * inner, cy + Math.sin(indicatorAngle) * inner)
-                ctx.lineTo(cx + Math.cos(indicatorAngle) * outer, cy + Math.sin(indicatorAngle) * outer)
+                ctx.moveTo(cx + Math.cos(a2) * capR * 0.18, cy + Math.sin(a2) * capR * 0.18)
+                ctx.lineTo(cx + Math.cos(a2) * capR * 0.76, cy + Math.sin(a2) * capR * 0.76)
                 ctx.stroke()
             }
         }
 
         MouseArea {
-            id: mouse
             anchors.fill: parent
-            enabled: root.enabled
             hoverEnabled: true
             cursorShape: Qt.SizeVerCursor
-
-            onPressed: function(mouseEvent) {
+            onPressed: function(e) {
                 root.dragging = true
-                root.pressY = mouseEvent.y
+                root.pressY = e.y
                 root.pressNorm = root.valueToNorm(root.value)
                 root.previewValue = root.value
             }
-
-            onPositionChanged: function(mouseEvent) {
+            onPositionChanged: function(e) {
                 if (!pressed) return
-                var fine = (mouseEvent.modifiers & Qt.ShiftModifier) !== 0
+                var fine = (e.modifiers & Qt.ShiftModifier) !== 0
                 var sensitivity = fine ? 420 : 145
-                var nextNorm = root.clamp(root.pressNorm + (root.pressY - mouseEvent.y) / sensitivity, 0, 1)
+                var nextNorm = root.clamp(root.pressNorm + (root.pressY - e.y) / sensitivity, 0, 1)
                 root.previewValue = root.normToValue(nextNorm)
                 root.valueEdited(root.previewValue)
             }
-
             onReleased: root.dragging = false
             onCanceled: root.dragging = false
             onDoubleClicked: root.valueEdited(root.defaultValue)
-
-            onWheel: function(wheelEvent) {
-                var step = (wheelEvent.modifiers & Qt.ShiftModifier) !== 0 ? 0.002 : 0.012
-                var nextNorm = root.clamp(root.valueToNorm(root.value) + (wheelEvent.angleDelta.y > 0 ? step : -step), 0, 1)
+            onWheel: function(e) {
+                var step = (e.modifiers & Qt.ShiftModifier) !== 0 ? 0.002 : 0.012
+                var nextNorm = root.clamp(root.valueToNorm(root.value) + (e.angleDelta.y > 0 ? step : -step), 0, 1)
                 root.previewValue = root.normToValue(nextNorm)
                 root.valueEdited(root.previewValue)
-                wheelEvent.accepted = true
+                e.accepted = true
             }
         }
     }
 
-    Text {
+    Rectangle {
         anchors.top: knobBox.bottom
-        anchors.topMargin: root.compact ? 0 : 2
+        anchors.topMargin: root.compact ? 0 : 1
         anchors.horizontalCenter: parent.horizontalCenter
-        text: root.formatValue(root.previewValue) + (root.unit.length ? " " + root.unit : "")
-        color: root.enabled ? Theme.text : Theme.textDim
-        font.family: Theme.fontFamily
-        font.pixelSize: root.compact ? Theme.textXS : Theme.textS
-        font.weight: Font.DemiBold
+        width: root.compact ? 64 : 76
+        height: root.compact ? 18 : 20
+        radius: 4
+        color: "#090D11"
+        border.width: 1
+        border.color: root.dragging ? root.accentColor : Theme.borderSoft
+
+        Text {
+            anchors.centerIn: parent
+            text: root.formatValue(root.previewValue) + (root.unit.length ? " " + root.unit : "")
+            color: root.dragging ? Theme.text : Theme.textSoft
+            font.family: Theme.fontFamily
+            font.pixelSize: root.compact ? Theme.textXS : Theme.textS
+            font.weight: Font.DemiBold
+        }
     }
 }
