@@ -10,7 +10,7 @@ ApplicationWindow {
     height: 940
     minimumWidth: 1260
     minimumHeight: 800
-    title: "SONKUPIK STUDIO — Native Console"
+    title: "SONKUPIK STUDIO — Karaoke Processor"
     color: Theme.bg
     readonly property int lowerRackHeight: 286
     property bool transportPlaying: false
@@ -272,82 +272,40 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillHeight: true }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 46
-                        radius: 7
-                        color: Theme.recessed
-                        border.width: 1
-                        border.color: Theme.borderSoft
-                        Column { anchors.centerIn: parent; spacing: 2; Text { anchors.horizontalCenter: parent.horizontalCenter; text: "NATIVE PREVIEW"; color: Theme.textDim; font.family: Theme.fontFamily; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.7 } Text { anchors.horizontalCenter: parent.horizontalCenter; text: "MUSIC WORKSPACE"; color: Theme.amber; font.family: Theme.fontFamily; font.pixelSize: 8; font.weight: Font.DemiBold } }
-                    }
                 }
             }
 
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: 11
                 spacing: 10
 
-                ColumnLayout {
+                EqGraph {
+                    id: eqGraph
+                    bandModel: root.studioEngine.musicEqBands
+                    hpfFreq: root.studioEngine.hpfHz
+                    lpfFreq: root.studioEngine.lpfHz
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 10
-
-                    EqGraph {
-                        id: eqGraph
-                        bandModel: root.studioEngine.musicEqBands
-                        hpfFreq: root.studioEngine.hpfHz
-                        lpfFreq: root.studioEngine.lpfHz
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.minimumHeight: 430
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: root.lowerRackHeight
-                        Layout.minimumHeight: root.lowerRackHeight
-                        Layout.maximumHeight: root.lowerRackHeight
-                        spacing: 10
-                        MusicInputPanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 500 }
-                        MusicTonePanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 340 }
-                        FilterPanel {
-                            engine: root.studioEngine
-                            Layout.preferredWidth: 224
-                            Layout.fillHeight: true
-                        }
-                    }
+                    Layout.minimumHeight: 430
                 }
 
-                ColumnLayout {
-                    Layout.preferredWidth: 258
-                    Layout.minimumWidth: 242
-                    Layout.maximumWidth: 278
-                    Layout.fillHeight: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.lowerRackHeight
+                    Layout.minimumHeight: root.lowerRackHeight
+                    Layout.maximumHeight: root.lowerRackHeight
                     spacing: 10
-
-                    PresetPanel { Layout.fillWidth: true; Layout.preferredHeight: 190 }
-                    BandInspector {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.minimumHeight: 300
-                        bandIndex: eqGraph.selectedIndex
-                        frequency: eqGraph.selectedFreq
-                        gain: eqGraph.selectedGain
-                        q: eqGraph.selectedQ
-                        onFrequencyEdited: function(v) { eqGraph.setSelectedFrequency(v) }
-                        onGainEdited: function(v) { eqGraph.setSelectedGain(v) }
-                        onQEdited: function(v) { eqGraph.setSelectedQValue(v) }
-                        onResetRequested: eqGraph.resetSelected()
-                    }
+                    MusicInputPanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 500 }
+                    MusicTonePanel { engine: root.studioEngine; Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 340 }
+                    FilterPanel { engine: root.studioEngine; Layout.preferredWidth: 224; Layout.fillHeight: true }
                     MasterStripPanel {
                         engine: root.studioEngine
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: root.lowerRackHeight
-                        Layout.minimumHeight: root.lowerRackHeight
-                        Layout.maximumHeight: root.lowerRackHeight
+                        Layout.preferredWidth: 176
+                        Layout.minimumWidth: 164
+                        Layout.maximumWidth: 190
+                        Layout.fillHeight: true
                     }
                 }
             }
