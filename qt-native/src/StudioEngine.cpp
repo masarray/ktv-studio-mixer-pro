@@ -3,9 +3,19 @@
 #include <QtMath>
 
 namespace {
-double clamp(double value, double minimum, double maximum)
+double clampValue(double value, double minimum, double maximum)
 {
     return qBound(minimum, value, maximum);
+}
+
+QString normalizeBandType(const QString &value)
+{
+    const QString upper = value.trimmed().toUpper();
+    if (upper == QStringLiteral("LS") || upper == QStringLiteral("LOW SHELF") || upper == QStringLiteral("LOWSHELF"))
+        return QStringLiteral("LOW SHELF");
+    if (upper == QStringLiteral("HS") || upper == QStringLiteral("HIGH SHELF") || upper == QStringLiteral("HIGHSHELF"))
+        return QStringLiteral("HIGH SHELF");
+    return QStringLiteral("BELL");
 }
 }
 
@@ -45,6 +55,7 @@ QVariantMap EqBandModel::get(int index) const
         return {};
     const auto &band = m_bands.at(index);
     return {{QStringLiteral("freq"), band.frequency},
+            {QStringLiteral("frequency"), band.frequency},
             {QStringLiteral("gain"), band.gain},
             {QStringLiteral("q"), band.q},
             {QStringLiteral("typeName"), band.typeName}};
@@ -55,9 +66,9 @@ void EqBandModel::setBand(int index, double frequency, double gain, double q)
     if (index < 0 || index >= m_bands.size())
         return;
     auto &band = m_bands[index];
-    const double nextFrequency = clamp(frequency, 20.0, 20000.0);
-    const double nextGain = clamp(gain, -24.0, 24.0);
-    const double nextQ = clamp(q, 0.1, 30.0);
+    const double nextFrequency = clampValue(frequency, 20.0, 20000.0);
+    const double nextGain = clampValue(gain, -24.0, 24.0);
+    const double nextQ = clampValue(q, 0.1, 30.0);
     if (qFuzzyCompare(band.frequency, nextFrequency)
         && qFuzzyCompare(band.gain + 25.0, nextGain + 25.0)
         && qFuzzyCompare(band.q, nextQ))
@@ -66,7 +77,20 @@ void EqBandModel::setBand(int index, double frequency, double gain, double q)
     band.gain = nextGain;
     band.q = nextQ;
     emit dataChanged(this->index(index), this->index(index), {FrequencyRole, GainRole, QRole});
-    emit bandChanged(index, band.frequency, band.gain, band.q);
+    emit bandChanged(index, band.frequency, band.gain, band.q, band.typeName);
+}
+
+void EqBandModel::setBandType(int index, const QString &typeName)
+{
+    if (index < 0 || index >= m_bands.size())
+        return;
+    auto &band = m_bands[index];
+    const QString normalized = normalizeBandType(typeName);
+    if (band.typeName == normalized)
+        return;
+    band.typeName = normalized;
+    emit dataChanged(this->index(index), this->index(index), {TypeNameRole});
+    emit bandChanged(index, band.frequency, band.gain, band.q, band.typeName);
 }
 
 void EqBandModel::resetBand(int index)
@@ -87,52 +111,149 @@ void EqBandModel::resetAll()
     endResetModel();
 }
 
+void EqBandModel::setHpfHz(double value)
+{
+    emit hpfEditRequested(clampValue(value, 20.0, 20000.0));
+}
+
+void EqBandModel::setLpfHz(double value)
+{
+    emit lpfEditRequested(clampValue(value, 20.0, 20000.0));
+}
+
+void EqBandModel::syncCrossover(double hpfHz, double lpfHz,
+                                const QString &hpType, const QString &lpType)
+{
+    const double nextHpf = clampValue(hpfHz, 20.0, 20000.0);
+    const double nextLpf = clampValue(lpfHz, 20.0, 20000.0);
+    if (qFuzzyCompare(m_hpfHz, nextHpf)
+        && qFuzzyCompare(m_lpfHz, nextLpf)
+        && m_hpType == hpType
+        && m_lpType == lpType)
+        return;
+    m_hpfHz = nextHpf;
+    m_lpfHz = nextLpf;
+    m_hpType = hpType;
+    m_lpType = lpType;
+    emit crossoverChanged();
+}
+
 StudioEngine::StudioEngine(QObject *parent)
     : QObject(parent)
 {
     connect(&m_musicEqBands, &EqBandModel::bandChanged, this,
-            [this](int index, double frequency, double gain, double q) {
+            [this](int index, double frequency, double gain, double q, const QString &typeName) {
         m_lastChangedPath = QStringLiteral("eq.music.bands.%1").arg(index);
         emit stateEdited(m_lastChangedPath,
                          QVariantMap{{QStringLiteral("frequency"), frequency},
                                      {QStringLiteral("gain"), gain},
-                                     {QStringLiteral("q"), q}});
+                                     {QStringLiteral("q"), q},
+                                     {QStringLiteral("type"), typeName}});
     });
-}
-
-#define DEFINE_DOUBLE_SETTER(Name, Member, Path, Minimum, Maximum, Notify) \
-void StudioEngine::set##Name(double value) { \
-    if (assign(Member, clamp(value, Minimum, Maximum), Path)) emit Notify(); \
+    connect(&m_musicEqBands, &EqBandModel::hpfEditRequested, this, &StudioEngine::setHpfHz);
+    connect(&m_musicEqBands, &EqBandModel::lpfEditRequested, this, &StudioEngine::setLpfHz);
+    syncMusicCrossoverModel();
 }
 
 void StudioEngine::setMusicKey(int value)
 {
     if (assign(m_musicKey, qBound(-7, value, 7), "music.key")) emit musicKeyChanged();
 }
-DEFINE_DOUBLE_SETTER(NoiseGate, m_noiseGate, "music.noiseGateDb", -80.0, 0.0, noiseGateChanged)
-DEFINE_DOUBLE_SETTER(Bass, m_bass, "music.bassDb", -12.0, 12.0, bassChanged)
-DEFINE_DOUBLE_SETTER(Mid, m_mid, "music.midDb", -12.0, 12.0, midChanged)
-DEFINE_DOUBLE_SETTER(MidFreq, m_midFreq, "music.midFreqHz", 80.0, 8000.0, midFreqChanged)
-DEFINE_DOUBLE_SETTER(Treble, m_treble, "music.trebleDb", -12.0, 12.0, trebleChanged)
-DEFINE_DOUBLE_SETTER(HpfHz, m_hpfHz, "eq.music.crossover.hpfHz", 20.0, 20000.0, hpfHzChanged)
-DEFINE_DOUBLE_SETTER(LpfHz, m_lpfHz, "eq.music.crossover.lpfHz", 20.0, 20000.0, lpfHzChanged)
-DEFINE_DOUBLE_SETTER(Input1Gain, m_input1Gain, "music.input1GainDb", -60.0, 10.0, input1GainChanged)
-DEFINE_DOUBLE_SETTER(Input2Gain, m_input2Gain, "music.input2GainDb", -60.0, 10.0, input2GainChanged)
-DEFINE_DOUBLE_SETTER(BluetoothGain, m_bluetoothGain, "music.bluetoothGainDb", -60.0, 10.0, bluetoothGainChanged)
-DEFINE_DOUBLE_SETTER(UDiskGain, m_uDiskGain, "music.uDiskGainDb", -60.0, 10.0, uDiskGainChanged)
-DEFINE_DOUBLE_SETTER(DigitalGain, m_digitalGain, "music.digitalGainDb", -60.0, 10.0, digitalGainChanged)
-DEFINE_DOUBLE_SETTER(MasterMusic, m_masterMusic, "system.topMusicVol", 0.0, 100.0, masterMusicChanged)
-DEFINE_DOUBLE_SETTER(MasterMic, m_masterMic, "system.topMicVol", 0.0, 100.0, masterMicChanged)
-DEFINE_DOUBLE_SETTER(MasterFx, m_masterFx, "system.topEffectVol", 0.0, 100.0, masterFxChanged)
 
-#undef DEFINE_DOUBLE_SETTER
+void StudioEngine::setNoiseGate(double value)
+{
+    if (assign(m_noiseGate, clampValue(value, -80.0, 0.0), "music.noiseGateDb")) emit noiseGateChanged();
+}
+
+void StudioEngine::setBass(double value)
+{
+    if (assign(m_bass, clampValue(value, -12.0, 12.0), "music.bassDb")) emit bassChanged();
+}
+
+void StudioEngine::setMid(double value)
+{
+    if (assign(m_mid, clampValue(value, -12.0, 12.0), "music.midDb")) emit midChanged();
+}
+
+void StudioEngine::setMidFreq(double value)
+{
+    if (assign(m_midFreq, clampValue(value, 80.0, 8000.0), "music.midFreqHz")) emit midFreqChanged();
+}
+
+void StudioEngine::setTreble(double value)
+{
+    if (assign(m_treble, clampValue(value, -12.0, 12.0), "music.trebleDb")) emit trebleChanged();
+}
+
+void StudioEngine::setHpfHz(double value)
+{
+    if (!assign(m_hpfHz, clampValue(value, 20.0, 20000.0), "eq.music.crossover.hpfHz")) return;
+    syncMusicCrossoverModel();
+    emit hpfHzChanged();
+}
+
+void StudioEngine::setLpfHz(double value)
+{
+    if (!assign(m_lpfHz, clampValue(value, 20.0, 20000.0), "eq.music.crossover.lpfHz")) return;
+    syncMusicCrossoverModel();
+    emit lpfHzChanged();
+}
 
 void StudioEngine::setHpType(const QString &value)
 {
-    if (assign(m_hpType, value, "eq.music.crossover.hpType")) emit hpTypeChanged();
+    if (!assign(m_hpType, value, "eq.music.crossover.hpType")) return;
+    syncMusicCrossoverModel();
+    emit hpTypeChanged();
 }
 
 void StudioEngine::setLpType(const QString &value)
 {
-    if (assign(m_lpType, value, "eq.music.crossover.lpType")) emit lpTypeChanged();
+    if (!assign(m_lpType, value, "eq.music.crossover.lpType")) return;
+    syncMusicCrossoverModel();
+    emit lpTypeChanged();
+}
+
+void StudioEngine::setInput1Gain(double value)
+{
+    if (assign(m_input1Gain, clampValue(value, -60.0, 10.0), "music.input1GainDb")) emit input1GainChanged();
+}
+
+void StudioEngine::setInput2Gain(double value)
+{
+    if (assign(m_input2Gain, clampValue(value, -60.0, 10.0), "music.input2GainDb")) emit input2GainChanged();
+}
+
+void StudioEngine::setBluetoothGain(double value)
+{
+    if (assign(m_bluetoothGain, clampValue(value, -60.0, 10.0), "music.bluetoothGainDb")) emit bluetoothGainChanged();
+}
+
+void StudioEngine::setUDiskGain(double value)
+{
+    if (assign(m_uDiskGain, clampValue(value, -60.0, 10.0), "music.uDiskGainDb")) emit uDiskGainChanged();
+}
+
+void StudioEngine::setDigitalGain(double value)
+{
+    if (assign(m_digitalGain, clampValue(value, -60.0, 10.0), "music.digitalGainDb")) emit digitalGainChanged();
+}
+
+void StudioEngine::setMasterMusic(double value)
+{
+    if (assign(m_masterMusic, clampValue(value, 0.0, 100.0), "system.topMusicVol")) emit masterMusicChanged();
+}
+
+void StudioEngine::setMasterMic(double value)
+{
+    if (assign(m_masterMic, clampValue(value, 0.0, 100.0), "system.topMicVol")) emit masterMicChanged();
+}
+
+void StudioEngine::setMasterFx(double value)
+{
+    if (assign(m_masterFx, clampValue(value, 0.0, 100.0), "system.topEffectVol")) emit masterFxChanged();
+}
+
+void StudioEngine::syncMusicCrossoverModel()
+{
+    m_musicEqBands.syncCrossover(m_hpfHz, m_lpfHz, m_hpType, m_lpType);
 }
