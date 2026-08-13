@@ -24,9 +24,24 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true
 
+      - name: Activate MSVC 2022
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Verify toolchain
+        shell: pwsh
+        run: |
+          where.exe cl
+          where.exe link
+          qmake -query QT_VERSION
+          qmake -query QT_INSTALL_PREFIX
+
       - name: Configure
         shell: pwsh
-        run: cmake -S qt-native -B qt-native/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: |
+          if (Test-Path qt-native/build) { Remove-Item -Recurse -Force qt-native/build }
+          cmake -S qt-native -B qt-native/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
 
       - name: Build
         shell: pwsh
