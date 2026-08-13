@@ -68,31 +68,46 @@ Item {
         anchors.right: readout.left
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        height: 8
+        height: 7
         radius: 4
-        color: "#06090C"
+        color: "#040608"
         border.width: 1
-        border.color: root.activeFocus ? Theme.focus : pointer.containsMouse ? Theme.highlight : Theme.borderSoft
+        border.color: root.activeFocus ? Theme.focus : pointer.containsMouse ? "#34434D" : "#11191F"
 
         Rectangle {
             anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.margins: 2
-            width: Math.max(3, (parent.width - 4) * root.valueToNorm(root.value))
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: 2
+            width: Math.max(2, (parent.width - 4) * root.valueToNorm(root.value))
+            height: 3
             radius: 2
             color: root.accentColor
-            opacity: 0.9
+            opacity: 0.88
         }
+
+        Rectangle {
+            id: sliderGlow
+            x: 2 + (parent.width - 12 - 4) * root.valueToNorm(root.value) - 5
+            anchors.verticalCenter: parent.verticalCenter
+            width: 22
+            height: 18
+            radius: 9
+            color: root.accentColor
+            opacity: root.activeFocus ? 0.17 : pointer.containsMouse ? 0.11 : 0.06
+            z: -1
+            Behavior on opacity { NumberAnimation { duration: 100 } }
+        }
+
         Rectangle {
             x: 2 + (parent.width - width - 4) * root.valueToNorm(root.value)
             anchors.verticalCenter: parent.verticalCenter
-            width: 8
-            height: 14
-            radius: 3
-            color: "#D9E1E6"
+            width: 11
+            height: 10
+            radius: 4
+            color: root.accentColor
             border.width: 1
-            border.color: root.activeFocus ? root.accentColor : "#66727C"
+            border.color: root.activeFocus ? "#C7FFFB" : "#6DE8DF"
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.leftMargin: 2; anchors.rightMargin: 2; height: 1; color: "#FFFFFF"; opacity: 0.45 }
         }
     }
 
@@ -103,9 +118,10 @@ Item {
         width: 72
         height: 25
         radius: 5
-        color: "#080C10"
+        color: "#06090C"
         border.width: 1
-        border.color: Theme.borderSoft
+        border.color: "#1B242B"
+        Rectangle { anchors.fill: parent; anchors.margins: -2; radius: parent.radius + 2; color: Theme.amber; opacity: 0.018; z: -2 }
         Row {
             anchors.centerIn: parent
             spacing: 3
