@@ -9,6 +9,10 @@ class EqBandModel final : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(int count READ count CONSTANT)
+    Q_PROPERTY(double hpfHz READ hpfHz NOTIFY crossoverChanged)
+    Q_PROPERTY(double lpfHz READ lpfHz NOTIFY crossoverChanged)
+    Q_PROPERTY(QString hpType READ hpType NOTIFY crossoverChanged)
+    Q_PROPERTY(QString lpType READ lpType NOTIFY crossoverChanged)
 
 public:
     enum Role {
@@ -24,13 +28,27 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
+    double hpfHz() const { return m_hpfHz; }
+    double lpfHz() const { return m_lpfHz; }
+    QString hpType() const { return m_hpType; }
+    QString lpType() const { return m_lpType; }
+
     Q_INVOKABLE QVariantMap get(int index) const;
     Q_INVOKABLE void setBand(int index, double frequency, double gain, double q);
+    Q_INVOKABLE void setBandType(int index, const QString &typeName);
     Q_INVOKABLE void resetBand(int index);
     Q_INVOKABLE void resetAll();
+    Q_INVOKABLE void setHpfHz(double value);
+    Q_INVOKABLE void setLpfHz(double value);
+
+    void syncCrossover(double hpfHz, double lpfHz,
+                       const QString &hpType, const QString &lpType);
 
 signals:
-    void bandChanged(int index, double frequency, double gain, double q);
+    void bandChanged(int index, double frequency, double gain, double q, const QString &typeName);
+    void crossoverChanged();
+    void hpfEditRequested(double value);
+    void lpfEditRequested(double value);
 
 private:
     struct Band {
@@ -40,6 +58,10 @@ private:
         QString typeName;
     };
     QList<Band> m_bands;
+    double m_hpfHz = 20.0;
+    double m_lpfHz = 20000.0;
+    QString m_hpType = QStringLiteral("HP Butter 12");
+    QString m_lpType = QStringLiteral("LP Butter 12");
 };
 
 class StudioEngine final : public QObject
@@ -142,6 +164,8 @@ private:
         emit stateEdited(m_lastChangedPath, QVariant::fromValue(value));
         return true;
     }
+
+    void syncMusicCrossoverModel();
 
     EqBandModel m_musicEqBands;
     int m_musicKey = 0;
