@@ -1,0 +1,47 @@
+name: Qt Native UI Prototype · Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qt-native-ui-prototype
+    paths:
+      - 'qt-native/**'
+      - '.github/workflows/qt-ui-prototype-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S qt-native -B qt-native/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build qt-native/build --config Release
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path qt-native/package | Out-Null
+          Copy-Item qt-native/build/SONKUPIK-STUDIO-Native-UI.exe qt-native/package/
+          windeployqt --release --qmldir qt-native/qml qt-native/package/SONKUPIK-STUDIO-Native-UI.exe
+
+      - name: Upload runnable prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONKUPIK-STUDIO-Native-UI-Windows
+          path: qt-native/package
+          if-no-files-found: error
