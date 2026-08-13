@@ -13,7 +13,6 @@ Item {
     property bool logarithmic: false
     property bool compact: false
     property color accentColor: Theme.accent
-    property bool enabled: true
 
     signal valueEdited(real newValue)
 
