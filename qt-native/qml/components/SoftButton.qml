@@ -20,6 +20,8 @@ Rectangle {
     readonly property color resolvedAccent: root.amber ? Theme.amber : Theme.accent
 
     activeFocusOnTab: true
+    clip: false
+
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             root.clicked()
@@ -30,62 +32,75 @@ Rectangle {
     implicitWidth: root.transport ? 29 : root.compact ? 52 : 70
     implicitHeight: root.transport ? 28 : root.compact ? 26 : 30
     transformOrigin: Item.Center
-    scale: mouse.pressed ? (root.transport ? 0.965 : 0.955) : 1.0
+    scale: mouse.pressed ? (root.transport ? 0.975 : 0.965) : 1.0
     transform: Translate {
-        id: pressTranslate
-        y: mouse.pressed ? (root.transport ? 1 : 2) : 0
-        Behavior on y { NumberAnimation { duration: 65; easing.type: Easing.OutQuad } }
+        y: mouse.pressed ? 1 : 0
+        Behavior on y { NumberAnimation { duration: 55; easing.type: Easing.OutQuad } }
     }
+
     radius: root.transport ? 5 : Theme.radiusSmall
     border.width: 1
     border.color: root.activeFocus ? Theme.focus
-                 : root.danger ? Theme.red
-                 : root.transport ? (root.activeAccent ? root.resolvedAccent : mouse.containsMouse ? "#53636F" : "#34414B")
-                 : root.activeAccent ? root.resolvedAccent
-                 : mouse.containsMouse ? Theme.highlight : Theme.borderSoft
-    color: "#0C1116"
+                 : root.danger ? "#9E4C53"
+                 : root.activeAccent ? Qt.rgba(root.resolvedAccent.r, root.resolvedAccent.g, root.resolvedAccent.b, root.transport ? 0.72 : 0.62)
+                 : mouse.containsMouse ? "#465560"
+                 : root.transport ? "#34414B" : Theme.borderSoft
+
     gradient: Gradient {
         GradientStop {
             position: 0.0
-            color: root.transport
-                ? (root.danger ? (mouse.pressed ? "#281518" : "#3B1C21")
-                   : root.activeAccent ? (mouse.pressed ? "#173638" : mouse.containsMouse ? "#2B5F61" : "#285154")
-                   : mouse.pressed ? "#11171C" : mouse.containsMouse ? "#27333C" : "#202A32")
-                : root.danger ? (mouse.pressed ? "#2A1518" : "#442126")
-                : root.checked ? (root.amber ? (mouse.pressed ? "#332A14" : "#4A3C18") : (mouse.pressed ? "#173638" : "#235154"))
-                : root.neonAccent ? (mouse.pressed ? "#173638" : mouse.containsMouse ? "#2A5559" : "#253B42")
-                : mouse.pressed ? "#151B21" : mouse.containsMouse ? "#303B45" : "#29343D"
+            color: root.danger ? (mouse.pressed ? "#211317" : "#30191D")
+                 : root.activeAccent ? (mouse.pressed ? "#173034" : root.transport ? "#203B40" : "#20383C")
+                 : mouse.pressed ? "#11171C"
+                 : mouse.containsMouse ? "#26313A"
+                 : root.transport ? "#202A32" : "#252F38"
         }
         GradientStop {
-            position: root.transport ? 0.46 : 0.52
-            color: root.transport
-                ? (root.danger ? "#1F1114" : root.activeAccent ? "#153234" : mouse.pressed ? "#0D1216" : "#141C22")
-                : root.danger ? "#241315"
-                : root.checked ? (root.amber ? "#2B2413" : "#163032")
-                : mouse.pressed ? "#10151A" : "#192129"
+            position: 0.48
+            color: root.danger ? "#1B1013"
+                 : root.activeAccent ? (root.transport ? "#13272B" : "#152A2D")
+                 : mouse.pressed ? "#0D1216" : "#151C22"
         }
         GradientStop {
             position: 1.0
-            color: root.transport ? (mouse.pressed ? "#05080B" : "#080D11") : mouse.pressed ? "#0A0E12" : "#0C1116"
+            color: root.danger ? "#0D090B"
+                 : root.activeAccent ? "#081216"
+                 : "#080D11"
         }
     }
 
-    Behavior on border.color { ColorAnimation { duration: 90 } }
-    Behavior on scale { NumberAnimation { duration: 55; easing.type: Easing.OutQuad } }
+    Behavior on border.color { ColorAnimation { duration: 85 } }
+    Behavior on scale { NumberAnimation { duration: 50; easing.type: Easing.OutQuad } }
 
+    // Active tint stays completely inside the control bounds. This avoids
+    // the old negative-margin glow being clipped by Qt Layout containers.
     Rectangle {
         anchors.fill: parent
-        anchors.margins: root.transport ? -5 : -3
-        radius: parent.radius + (root.transport ? 5 : 3)
+        anchors.margins: 1
+        radius: Math.max(2, parent.radius - 1)
         color: root.resolvedAccent
-        opacity: mouse.pressed ? 0.06
-                 : root.checked ? (root.transport ? 0.22 : 0.18)
-                 : root.neonAccent ? (root.transport ? (mouse.containsMouse ? 0.20 : 0.13) : mouse.containsMouse ? 0.18 : 0.09)
-                 : 0
-        z: -3
-        Behavior on opacity { NumberAnimation { duration: 100 } }
+        opacity: root.activeAccent ? (root.transport ? 0.055 : 0.045) : 0
+        Behavior on opacity { NumberAnimation { duration: 90 } }
     }
 
+    // Console-style underglow: intentionally inset so every button keeps a
+    // clean cyan/amber light without spilling outside its layout cell.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: root.transport ? 4 : 5
+        anchors.rightMargin: root.transport ? 4 : 5
+        anchors.bottomMargin: 1
+        height: root.transport ? 4 : 3
+        radius: height / 2
+        color: root.resolvedAccent
+        opacity: root.activeAccent ? (mouse.pressed ? 0.16 : root.transport ? 0.30 : 0.22) : 0
+        Behavior on opacity { NumberAnimation { duration: 90 } }
+    }
+
+    // One inner edge only for transport buttons; the previous extra border
+    // stack made the top bar look dirty at native DPI scaling.
     Rectangle {
         visible: root.transport
         anchors.fill: parent
@@ -93,35 +108,20 @@ Rectangle {
         radius: Math.max(2, parent.radius - 2)
         color: "transparent"
         border.width: 1
-        border.color: root.activeAccent ? "#385EDDD4" : "#18FFFFFF"
-        opacity: mouse.pressed ? 0.45 : 0.75
+        border.color: root.activeAccent ? "#285EDDD4" : "#12FFFFFF"
     }
 
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: root.transport ? 3 : 0
-        anchors.rightMargin: root.transport ? 3 : 0
+        anchors.leftMargin: root.transport ? 4 : 3
+        anchors.rightMargin: root.transport ? 4 : 3
+        anchors.topMargin: 1
         height: 1
-        radius: parent.radius
         color: root.activeAccent ? root.resolvedAccent : "#FFFFFF"
-        opacity: mouse.pressed ? 0.02
-                 : root.checked ? (root.transport ? 0.78 : 0.66)
-                 : root.neonAccent ? (root.transport ? 0.56 : 0.38)
-                 : mouse.containsMouse ? 0.13 : root.transport ? 0.11 : 0.09
-    }
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: 3
-        anchors.rightMargin: 3
-        height: mouse.pressed ? 1 : 2
-        radius: 1
-        color: "#000000"
-        opacity: mouse.pressed ? 0.18 : root.transport ? 0.76 : 0.62
+        opacity: root.activeAccent ? (root.transport ? 0.40 : 0.30)
+                 : mouse.containsMouse ? 0.11 : 0.065
     }
 
     Row {
@@ -134,15 +134,18 @@ Rectangle {
             height: width
             anchors.verticalCenter: parent.verticalCenter
 
+            // Keep icon glow subtle and contained. The web console reads as
+            // illuminated hardware because the focal light is on the glyph,
+            // not because several outlines glow at once.
             LucideIcon {
                 anchors.centerIn: parent
-                width: parent.width + (root.transport ? 5 : 3)
+                width: parent.width + (root.transport ? 3 : 2)
                 height: width
                 name: root.iconName
                 color: root.danger ? Theme.red : root.resolvedAccent
-                strokeWidth: root.transport ? 3.6 : 3.2
+                strokeWidth: root.transport ? 3.0 : 2.8
                 filled: root.iconFilled
-                opacity: root.activeAccent ? (mouse.containsMouse ? 0.34 : root.transport ? 0.22 : 0.16) : 0
+                opacity: root.activeAccent ? (root.transport ? 0.14 : 0.10) : 0
             }
             LucideIcon {
                 anchors.centerIn: parent
@@ -152,7 +155,7 @@ Rectangle {
                 color: root.danger ? "#FFD8D8"
                      : root.activeAccent || root.accentIcon ? root.resolvedAccent
                      : root.transport ? "#A7BBC6" : Theme.textSoft
-                strokeWidth: root.transport ? 2.0 : 1.9
+                strokeWidth: root.transport ? 1.9 : 1.8
                 filled: root.iconFilled
             }
         }
@@ -161,7 +164,9 @@ Rectangle {
             id: label
             visible: !root.iconOnly && text.length > 0
             anchors.verticalCenter: parent.verticalCenter
-            color: root.danger ? "#FFD8D8" : root.checked ? Theme.text : Theme.textSoft
+            color: root.danger ? "#FFD8D8"
+                 : root.checked ? Theme.text
+                 : root.activeAccent ? "#DDF9F6" : Theme.textSoft
             font.family: Theme.fontFamily
             font.pixelSize: root.compact ? Theme.textXS : Theme.textS
             font.weight: root.checked ? Font.DemiBold : Font.Medium
