@@ -33,12 +33,12 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 58
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#202A33" }
-                GradientStop { position: 0.16; color: "#182129" }
-                GradientStop { position: 1.0; color: "#0C1116" }
+                GradientStop { position: 0.0; color: "#1A232B" }
+                GradientStop { position: 0.22; color: "#141C23" }
+                GradientStop { position: 1.0; color: "#0B1015" }
             }
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: "#FFFFFF"; opacity: 0.05 }
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: "#25313A" }
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: "#FFFFFF"; opacity: 0.035 }
 
             RowLayout {
                 anchors.fill: parent
@@ -69,34 +69,29 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
+                // Clean web-style player transport: one shell, one edge and
+                // the illuminated controls. No negative-margin shadows.
                 Rectangle {
                     Layout.preferredWidth: 148
                     Layout.preferredHeight: 36
                     radius: 8
                     border.width: 1
-                    border.color: "#2D3943"
+                    border.color: "#2A3741"
                     gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#17212A" }
-                        GradientStop { position: 0.34; color: "#10171D" }
+                        GradientStop { position: 0.0; color: "#151E25" }
+                        GradientStop { position: 0.45; color: "#0E151B" }
                         GradientStop { position: 1.0; color: "#070B0F" }
-                    }
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -3
-                        radius: parent.radius + 3
-                        color: "#000000"
-                        opacity: 0.18
-                        z: -3
                     }
                     Rectangle {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.leftMargin: 4
-                        anchors.rightMargin: 4
+                        anchors.leftMargin: 5
+                        anchors.rightMargin: 5
+                        anchors.topMargin: 1
                         height: 1
                         color: "#FFFFFF"
-                        opacity: 0.08
+                        opacity: 0.055
                     }
                     RowLayout {
                         anchors.fill: parent
@@ -115,7 +110,7 @@ ApplicationWindow {
                             onClicked: root.transportPlaying = !root.transportPlaying
                         }
                         SoftButton { Layout.preferredWidth: 27; Layout.fillHeight: true; transport: true; iconName: "skip-forward"; iconOnly: true; iconFilled: true }
-                        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: "#34414B" }
+                        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 16; color: "#2E3A43" }
                         SoftButton {
                             Layout.preferredWidth: 27
                             Layout.fillHeight: true
@@ -134,11 +129,20 @@ ApplicationWindow {
                     Layout.preferredWidth: 186
                     Layout.preferredHeight: 34
                     radius: 6
-                    color: Theme.recessed
+                    color: "#080C0F"
                     border.width: 1
-                    border.color: "#3D351A"
-                    Rectangle { anchors.fill: parent; anchors.margins: -3; radius: parent.radius + 3; color: Theme.amber; opacity: 0.025; z: -2 }
-                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.leftMargin: 5; anchors.rightMargin: 5; height: 1; color: Theme.amber; opacity: 0.18 }
+                    border.color: "#373019"
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.leftMargin: 6
+                        anchors.rightMargin: 6
+                        anchors.topMargin: 1
+                        height: 1
+                        color: Theme.amber
+                        opacity: 0.12
+                    }
                     Text { anchors.centerIn: parent; text: "DEFAULT FLAT"; color: Theme.amber; font.family: Theme.fontFamily; font.pixelSize: Theme.textS; font.weight: Font.Bold; font.letterSpacing: 0.35 }
                 }
 
@@ -155,9 +159,21 @@ ApplicationWindow {
                     Layout.preferredWidth: 72
                     Layout.preferredHeight: 28
                     radius: 6
-                    color: Theme.amberFaint
+                    color: "#12130D"
                     border.width: 1
-                    border.color: Theme.amberSoft
+                    border.color: "#493C16"
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 7
+                        anchors.rightMargin: 7
+                        anchors.bottomMargin: 1
+                        height: 2
+                        radius: 1
+                        color: Theme.amber
+                        opacity: 0.18
+                    }
                     Text { anchors.centerIn: parent; text: "OFFLINE"; color: Theme.amber; font.family: Theme.fontFamily; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.7 }
                 }
                 SoftButton { Layout.preferredWidth: 74; text: "IMPORT"; iconName: "upload"; compact: true }
