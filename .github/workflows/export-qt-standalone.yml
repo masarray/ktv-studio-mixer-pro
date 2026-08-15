@@ -1,1 +1,161 @@
-noop
+name: Export Qt Standalone Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qt-native-ui-prototype
+    paths:
+      - 'qt-native/**'
+      - 'src/assets/sonkupik-logo.png'
+      - '.github/workflows/export-qt-standalone.yml'
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Qt branch
+        uses: actions/checkout@v4
+
+      - name: Prepare standalone Qt source
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/SONKUPIK-STUDIO-Qt"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          cp qt-native/CMakeLists.txt "$OUT/"
+          cp qt-native/README.md "$OUT/"
+          cp qt-native/DESIGN_NOTES.md "$OUT/"
+          cp qt-native/build-windows.cmd "$OUT/"
+          cp -R qt-native/qml "$OUT/"
+          cp -R qt-native/src "$OUT/"
+          cp -R qt-native/packaging "$OUT/"
+
+          mkdir -p "$OUT/assets"
+          cp src/assets/sonkupik-logo.png "$OUT/assets/sonkupik-logo.png"
+
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          out = Path(os.environ['RUNNER_TEMP']) / 'SONKUPIK-STUDIO-Qt'
+          cmake = out / 'CMakeLists.txt'
+          text = cmake.read_text(encoding='utf-8')
+          text = text.replace(
+              '${CMAKE_CURRENT_SOURCE_DIR}/../src/assets/sonkupik-logo.png',
+              '${CMAKE_CURRENT_SOURCE_DIR}/assets/sonkupik-logo.png'
+          )
+          cmake.write_text(text, encoding='utf-8')
+          PY
+
+          cat > "$OUT/.gitignore" <<'EOF'
+          # Qt/CMake build outputs
+          /build/
+          /package/
+          /cmake-build-*/
+          CMakeCache.txt
+          CMakeFiles/
+          cmake_install.cmake
+          Makefile
+          *.ninja
+          .ninja_*
+
+          # IDE/local
+          .vs/
+          .vscode/
+          .idea/
+          *.user
+          *.user.*
+          *.autosave
+
+          # Binary artifacts
+          *.exe
+          *.dll
+          *.pdb
+          *.ilk
+          *.obj
+          *.lib
+          *.exp
+          *.zip
+
+          # OS
+          Thumbs.db
+          .DS_Store
+          EOF
+
+          mkdir -p "$OUT/.github/workflows"
+          cat > "$OUT/.github/workflows/windows-build.yml" <<'EOF'
+          name: Qt Windows Build
+
+          on:
+            workflow_dispatch:
+            push:
+            pull_request:
+
+          jobs:
+            build:
+              runs-on: windows-2022
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+
+                - name: Install Qt
+                  uses: jurplel/install-qt-action@v4
+                  with:
+                    version: '6.8.3'
+                    arch: 'win64_msvc2022_64'
+                    cache: true
+
+                - name: Activate MSVC 2022
+                  uses: ilammy/msvc-dev-cmd@v1
+                  with:
+                    arch: x64
+
+                - name: Configure
+                  shell: pwsh
+                  run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
+
+                - name: Build
+                  shell: pwsh
+                  run: cmake --build build --config Release
+
+                - name: Deploy Qt runtime
+                  shell: pwsh
+                  run: |
+                    New-Item -ItemType Directory -Force -Path package | Out-Null
+                    Copy-Item build/SONKUPIK-STUDIO-Native-UI.exe package/
+                    windeployqt --release --qmldir qml package/SONKUPIK-STUDIO-Native-UI.exe
+
+                - name: Upload runnable build
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: SONKUPIK-STUDIO-Qt-Windows
+                    path: package
+                    if-no-files-found: error
+          EOF
+
+          cat > "$OUT/SOURCE_SNAPSHOT.md" <<EOF
+          # Source Snapshot
+
+          This standalone Qt source package was exported from:
+
+          - source repository: masarray/ktv-studio-mixer-pro
+          - source branch: qt-native-ui-prototype
+          - source commit: ${GITHUB_SHA}
+
+          The Electron/web application is intentionally excluded.
+          EOF
+
+          echo "Standalone files:"
+          find "$OUT" -type f | sort
+
+      - name: Upload Qt source-only archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONKUPIK-STUDIO-Qt-Source
+          path: ${{ runner.temp }}/SONKUPIK-STUDIO-Qt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
