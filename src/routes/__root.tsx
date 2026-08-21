@@ -10,6 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import eqStickyCss from "../eq-sticky.css?url";
 import { reportAppError } from "../lib/app-error-reporting";
 
 const faviconUrl = "/sonkupik-icon-128.png";
@@ -89,6 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: eqStickyCss },
       { rel: "icon", type: "image/png", href: faviconUrl },
       { rel: "shortcut icon", href: "/favicon.ico" },
       { rel: "apple-touch-icon", href: faviconUrl },

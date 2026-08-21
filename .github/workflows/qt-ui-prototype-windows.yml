@@ -1,0 +1,71 @@
+name: Qt Native UI Prototype · Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qt-native-ui-prototype
+    paths:
+      - 'qt-native/**'
+      - '.github/workflows/qt-ui-prototype-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Activate MSVC 2022
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Verify toolchain
+        shell: pwsh
+        run: |
+          where.exe cl
+          where.exe link
+          qmake -query QT_VERSION
+          qmake -query QT_INSTALL_PREFIX
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          if (Test-Path qt-native/build) { Remove-Item -Recurse -Force qt-native/build }
+          cmake -S qt-native -B qt-native/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $output = & cmake --build qt-native/build --config Release 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Tee-Object -FilePath qt-native/build-output.log
+          if ($exitCode -ne 0) {
+            $tail = ($output | Select-Object -Last 80 | Out-String)
+            $escaped = $tail.Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Host "::error title=Qt build failed::$escaped"
+            exit $exitCode
+          }
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path qt-native/package | Out-Null
+          Copy-Item qt-native/build/SONKUPIK-STUDIO-Native-UI.exe qt-native/package/
+          windeployqt --release --qmldir qt-native/qml qt-native/package/SONKUPIK-STUDIO-Native-UI.exe
+
+      - name: Upload runnable prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONKUPIK-STUDIO-Native-UI-Windows
+          path: qt-native/package
+          if-no-files-found: error
