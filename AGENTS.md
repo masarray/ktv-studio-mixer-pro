@@ -263,7 +263,23 @@ Do not claim optimization without evidence.
 
 Prefer reducing work and state propagation over adding more threads, caches, or memoization blindly.
 
-## 17. Regression prevention
+## 17. Exception-free hot paths, typed Result, and asynchronous diagnostics
+
+Expected or recoverable failures must not use thrown exceptions/rejected promises as routine control flow inside high-frequency transport, packet parsing, meter/telemetry, preset-processing loops, or renderer-adjacent hot paths.
+
+In TypeScript/JavaScript, prefer one consistent typed/discriminated result contract such as `{ ok: true, value } | { ok: false, error }` for application/domain operations where callers need explicit failure information. Runtime validation failures, malformed frames, unavailable devices, timeouts, stale responses, unsupported values, or invalid preset data should normally become structured results/state rather than uncaught exceptions.
+
+Exceptions and Promise rejections from Node, Electron, filesystem/network APIs, `serialport`, `node-hid`, WebSocket, or third-party libraries may still occur. Catch them at the nearest meaningful adapter/IPC/application boundary, convert them to the same structured error model, and preserve Abort/cancellation semantics. Do not scatter broad `try/catch` through inner event loops and do not silently swallow failures.
+
+Hot-path error reporting must not synchronously write files, spam console output, serialize large JSON, send telemetry, update React state per failure, or format expensive stack/message strings repeatedly. Publish compact structured diagnostic events to a bounded asynchronous queue owned outside the renderer hot path.
+
+The diagnostic queue must have an explicit capacity and overload policy. Deduplicate/rate-limit identical events, aggregate occurrence counts, and preserve latest/high-severity information according to policy. A slow diagnostic consumer must never block serial/HID/WebSocket processing, IPC, device commands, or rendering.
+
+Background diagnostic processing may format human-readable messages, persist logs, or publish a low-frequency diagnostic summary to the UI. Error storms must collapse into summaries such as `DEVICE_TIMEOUT x 5000`, not 5000 React updates/log writes.
+
+The diagnostic subsystem is observational. If it fails, the application/device state machine must remain correct and responsive. Do not create multiple incompatible Result/error abstractions in different services; use one coherent machine-readable error-code/context model and translate library-specific failures at adapter boundaries.
+
+## 18. Regression prevention
 
 Every bug fix should add/update a regression test or deterministic source/runtime check when practical.
 
@@ -273,7 +289,7 @@ Use the existing test scripts in `package.json` and extend them rather than crea
 
 Do not change preset format, device command mapping, persistent settings, or packaging semantics without compatibility analysis.
 
-## 18. Change discipline
+## 19. Change discipline
 
 Prefer the smallest coherent root-cause fix.
 
@@ -285,7 +301,7 @@ Do not:
 - add dependencies without evaluating bundle size, native packaging risk, maintenance, security, and runtime overhead;
 - add caches/workers/pools without identifying the bottleneck they solve.
 
-## 19. Definition of done
+## 20. Definition of done
 
 A task is not complete because `npm run build` passes.
 
@@ -303,7 +319,7 @@ LINT/STATIC CHECKS
 
 Never claim a check was run when it was not.
 
-## 20. Agent completion report
+## 21. Agent completion report
 
 Report:
 - Changed;
