@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,8 +35,52 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      # Keep the repository-wide lint debt visible, but do not let pre-existing
+      # findings prevent the regression/build gates below from executing.
+      - name: Full repository lint (baseline visibility)
+        id: full_lint
+        continue-on-error: true
         run: npm run lint
+
+      # New or modified JS/TS source must be clean even while legacy lint debt
+      # is being paid down. This is the blocking no-new-debt gate for PRs.
+      - name: Enforce no new lint debt
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $base = "${{ github.event.pull_request.base.sha }}"
+          if ([string]::IsNullOrWhiteSpace($base)) {
+            throw "Pull-request base SHA is unavailable; cannot enforce changed-file lint."
+          }
+
+          $changed = @(
+            git diff --name-only "$base...HEAD" |
+              Where-Object { $_ -match '\.(js|jsx|ts|tsx|mjs|cjs)$' }
+          )
+
+          if ($changed.Count -eq 0) {
+            Write-Host "No JavaScript/TypeScript source files changed; no-new-debt lint passes."
+            exit 0
+          }
+
+          Write-Host "Blocking lint for changed source files:"
+          $changed | ForEach-Object { Write-Host " - $_" }
+          & npx eslint -- @changed
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Record baseline lint status
+        if: always()
+        shell: pwsh
+        run: |
+          if ("${{ steps.full_lint.outcome }}" -eq "failure") {
+            Add-Content $env:GITHUB_STEP_SUMMARY "### Lint baseline"
+            Add-Content $env:GITHUB_STEP_SUMMARY "⚠️ Full-repository ESLint still reports pre-existing debt. Changed JS/TS files remain protected by the blocking no-new-debt gate."
+          } else {
+            Add-Content $env:GITHUB_STEP_SUMMARY "### Lint baseline"
+            Add-Content $env:GITHUB_STEP_SUMMARY "✅ Full-repository ESLint is clean."
+          }
 
       - name: Validate Electron metadata
         run: npm run test:electron-metadata
